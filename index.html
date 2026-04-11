@@ -1,0 +1,2418 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CVM · Plataforma de Vendas v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{--navy:#0F1F45;--navy2:#1A2E5E;--navy3:#0A1830;--teal:#028090;--teal2:#016f7e;--mint:#02C39A;--orange:#F4A261;--yellow:#F9C74F;--red:#E53935;--green:#16A34A;--purple:#8B5CF6;--sky:#0EA5E9;--bg:#EEF1F8;--surface:#fff;--border:#DDE4F0;--muted:#6B7FA8;--text:#0F1F45;--sidebar-w:252px;--radius:12px;--shadow:0 2px 16px rgba(15,31,69,.1);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
+.hidden{display:none!important;}
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy3),var(--navy2),#1a3a6e);}
+.login-card{background:rgba(255,255,255,.07);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.13);border-radius:20px;padding:44px;width:420px;max-width:calc(100vw - 32px);}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px;}
+.login-logo-dot{width:14px;height:14px;border-radius:50%;background:var(--mint);}
+.login-logo-text{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;}
+.login-logo-sub{font-size:10px;color:rgba(255,255,255,.45);}
+.login-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#fff;margin-bottom:6px;}
+.login-sub{font-size:13px;color:rgba(255,255,255,.5);margin-bottom:26px;}
+.form-group{margin-bottom:16px;}
+.form-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;display:block;}
+.form-input{width:100%;padding:12px 14px;background:rgba(255,255,255,.09);border:1.5px solid rgba(255,255,255,.15);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;color:#fff;outline:none;}
+.form-input:focus{border-color:var(--mint);}
+.login-btn{width:100%;padding:13px;background:var(--mint);border:none;border-radius:10px;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--navy);cursor:pointer;margin-top:8px;}
+.login-error{background:rgba(229,57,53,.2);border:1px solid rgba(229,57,53,.4);color:#ff8080;border-radius:8px;padding:10px 14px;font-size:12px;margin-top:10px;display:none;}
+.login-demo{margin-top:24px;padding-top:18px;border-top:1px solid rgba(255,255,255,.1);}
+.login-demo-title{font-size:10px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+.demo-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.demo-pill{padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;font-size:11px;color:rgba(255,255,255,.6);cursor:pointer;}
+.otp-card{background:rgba(255,255,255,.07);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.13);border-radius:20px;padding:44px;width:420px;max-width:calc(100vw - 32px);text-align:center;}
+.otp-icon{font-size:44px;margin-bottom:14px;}
+.otp-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#fff;margin-bottom:8px;}
+.otp-sub{font-size:13px;color:rgba(255,255,255,.5);margin-bottom:22px;line-height:1.6;}
+.otp-demo-box{background:rgba(2,195,154,.1);border:1.5px solid rgba(2,195,154,.3);border-radius:12px;padding:16px;margin-bottom:20px;}
+.otp-demo-label{font-size:10px;font-weight:700;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.otp-code{font-family:'DM Mono',monospace;font-size:36px;font-weight:800;color:var(--mint);letter-spacing:10px;}
+.otp-exp{font-size:11px;color:rgba(255,255,255,.35);margin-top:6px;}
+.otp-input{width:100%;padding:14px;background:rgba(255,255,255,.09);border:1.5px solid rgba(255,255,255,.15);border-radius:10px;font-family:'DM Mono',monospace;font-size:24px;font-weight:800;color:#fff;outline:none;text-align:center;letter-spacing:8px;margin-bottom:4px;}
+.otp-input:focus{border-color:var(--mint);}
+.otp-err{color:#ff8080;font-size:12px;margin-top:8px;display:none;}
+.otp-back{background:transparent;border:none;color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;margin-top:12px;text-decoration:underline;}
+#app{display:flex;min-height:100vh;}
+#sidebar{width:var(--sidebar-w);background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:50;transition:transform .25s;}
+#main-content{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--navy);}
+.page-content{padding:24px;flex:1;}
+.sb-header{padding:20px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-logo{display:flex;align-items:center;gap:10px;}
+.sb-dot{width:9px;height:9px;border-radius:50%;background:var(--mint);}
+.sb-logo-text{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:#fff;}
+.sb-logo-sub{font-size:10px;color:rgba(255,255,255,.35);}
+.v3b{background:var(--mint);color:var(--navy);font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;margin-left:4px;}
+.sb-store{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-store-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;}
+.store-sel{width:100%;padding:7px 10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#fff;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;outline:none;}
+.store-sel option{background:var(--navy2);}
+.sb-nav{flex:1;padding:10px;overflow-y:auto;}
+.nav-sec{font-size:9px;font-weight:700;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.6px;padding:8px 8px 4px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;margin-bottom:2px;color:rgba(255,255,255,.6);font-size:13px;font-weight:500;}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff;}
+.nav-item.active{background:var(--teal);color:#fff;font-weight:700;}
+.nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;}
+.nav-badge.warn{background:var(--orange);}
+.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);}
+.u-info{display:flex;align-items:center;gap:10px;}
+.u-avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;color:#fff;flex-shrink:0;}
+.u-name{font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.u-role{font-size:10px;color:rgba(255,255,255,.4);}
+.logout-btn{margin-left:auto;padding:5px 8px;background:rgba(255,255,255,.06);border:none;border-radius:7px;color:rgba(255,255,255,.5);cursor:pointer;font-size:16px;}
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+.kpi{background:var(--surface);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);border-top:3px solid var(--teal);position:relative;overflow:hidden;}
+.kpi.green{border-top-color:var(--mint);}
+.kpi.orange{border-top-color:var(--orange);}
+.kpi.red{border-top-color:var(--red);}
+.kpi.purple{border-top-color:var(--purple);}
+.kpi.sky{border-top-color:var(--sky);}
+.kpi-icon{position:absolute;right:14px;top:14px;font-size:28px;opacity:.12;}
+.kpi-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--navy);line-height:1;}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:5px;}
+.kpi-trend{font-size:11px;font-weight:700;margin-top:6px;}
+.trend-up{color:var(--green);}
+.trend-down{color:var(--red);}
+.kpi.pulse{animation:kpipulse 2s ease infinite;}
+@keyframes kpipulse{0%,100%{box-shadow:var(--shadow);}50%{box-shadow:0 0 0 4px rgba(229,57,53,.2);}}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:var(--bg);padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#F5F8FF;}
+.pill{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+.pill-green{background:#DCFCE7;color:#166534;}
+.pill-orange{background:#FEF3C7;color:#92400E;}
+.pill-red{background:#FEF2F2;color:#991B1B;}
+.pill-blue{background:#DBEAFE;color:#1D4ED8;}
+.pill-purple{background:#EDE9FE;color:#6D28D9;}
+.pill-teal{background:rgba(2,128,144,.12);color:var(--teal);}
+.pill-gray{background:#F3F4F6;color:#374151;}
+.pill-sky{background:#E0F2FE;color:#0369A1;}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:9px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;white-space:nowrap;}
+.btn-primary{background:var(--teal);color:#fff;}
+.btn-primary:hover{background:var(--teal2);}
+.btn-success{background:var(--mint);color:var(--navy);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-sky{background:var(--sky);color:#fff;}
+.btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--muted);}
+.btn-ghost:hover{border-color:var(--teal);color:var(--teal);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+#modal-overlay{position:fixed;inset:0;background:rgba(15,31,69,.55);backdrop-filter:blur(4px);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;}
+.modal{background:var(--surface);border-radius:16px;width:100%;max-width:640px;box-shadow:0 20px 60px rgba(15,31,69,.25);margin:auto;}
+.modal-header{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--navy);}
+.modal-close{width:30px;height:30px;border-radius:50%;background:var(--bg);border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+.modal-body{padding:20px 24px;}
+.modal-footer{padding:0 24px 20px;display:flex;gap:10px;justify-content:flex-end;}
+.frow{display:grid;gap:12px;margin-bottom:14px;}
+.frow-2{grid-template-columns:1fr 1fr;}
+.frow-3{grid-template-columns:1fr 1fr 1fr;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+.flbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.flbl .req{color:var(--red);}
+.finput,.fselect,.ftextarea{padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;background:#fff;width:100%;}
+.finput:focus,.fselect:focus,.ftextarea:focus{border-color:var(--teal);}
+.finput.err{border-color:var(--red);}
+.ferr{font-size:10px;color:var(--red);font-weight:600;}
+.fok{font-size:10px;color:var(--green);font-weight:600;}
+.fwarn{font-size:10px;color:var(--orange);font-weight:600;}
+.ftextarea{resize:vertical;min-height:70px;}
+.sec-divider{height:1px;background:var(--border);margin:16px 0;}
+.sec-lbl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+.check-group{display:flex;flex-wrap:wrap;gap:8px;}
+.check-item{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--bg);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;}
+.check-item input{accent-color:var(--teal);}
+.kb-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;align-items:flex-start;}
+.kb-board::-webkit-scrollbar{height:6px;}
+.kb-board::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.kb-col{min-width:240px;width:240px;flex-shrink:0;}
+.kb-col-hd{padding:10px 12px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between;}
+.kb-col-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#fff;}
+.kb-col-cnt{background:rgba(255,255,255,.25);color:#fff;font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;}
+.kb-col-body{background:rgba(255,255,255,.5);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;min-height:80px;padding:8px;display:flex;flex-direction:column;gap:7px;}
+.kb-col-body.drag-over{background:rgba(2,195,154,.08);border-color:var(--mint);}
+.kb-card{background:var(--surface);border-radius:9px;padding:11px 13px;cursor:grab;box-shadow:0 1px 8px rgba(15,31,69,.08);border:1px solid var(--border);position:relative;}
+.kb-card:hover{box-shadow:0 4px 16px rgba(15,31,69,.14);}
+.kb-card.dragging{opacity:.5;}
+.kb-card.dup-warn{border-color:var(--orange);border-width:2px;}
+.kb-card.stale-new{border-color:var(--red);border-left:3px solid var(--red);}
+.kb-card.pv-card{border-left:3px solid var(--sky);}
+.card-name{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-dest{font-size:11px;color:var(--muted);margin-bottom:4px;}
+.card-gmv{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);}
+.card-meta{display:flex;align-items:center;justify-content:space-between;margin-top:7px;}
+.card-days{font-size:10px;color:var(--muted);}
+.card-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;}
+.card-actions{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap;}
+.cbtn{padding:4px 8px;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;}
+.cbtn-teal{background:rgba(2,128,144,.1);color:var(--teal);}
+.cbtn-red{background:rgba(229,57,53,.1);color:var(--red);}
+.cbtn-orange{background:rgba(244,162,97,.1);color:#b8722a;}
+.cbtn-sky{background:rgba(14,165,233,.1);color:var(--sky);}
+.card-fu{font-size:10px;margin-top:4px;}
+.fu-late{color:var(--red);}
+.fu-today{color:var(--orange);}
+.fu-ok{color:var(--muted);}
+.dup-badge{position:absolute;top:6px;right:6px;background:var(--orange);color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:5px;}
+.stale-badge{background:linear-gradient(135deg,#fff3e0,#fce4ec);border:1.5px solid var(--orange);border-radius:7px;padding:3px 7px;font-size:10px;font-weight:800;color:#b8722a;margin-top:4px;display:inline-block;animation:kpipulse 2s ease infinite;}
+.nps-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-family:'Syne',sans-serif;font-size:11px;font-weight:800;color:#fff;}
+.nps9{background:var(--green);}
+.nps7{background:var(--yellow);color:var(--navy);}
+.npslow{background:var(--red);}
+.npsna{background:var(--muted);}
+.no-ins{font-size:9px;color:var(--orange);font-weight:700;margin-top:2px;}
+.add-lead-btn{width:100%;padding:8px;background:rgba(2,128,144,.06);border:1.5px dashed rgba(2,128,144,.3);border-radius:8px;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;margin-top:4px;}
+.alert{border-radius:9px;padding:10px 14px;font-size:12px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start;}
+.alert-ico{font-size:15px;flex-shrink:0;margin-top:1px;}
+.alert.ok{background:#F0FDF4;border:1px solid #86EFAC;color:#166534;}
+.alert.warn{background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;}
+.alert.danger{background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;}
+.alert.info{background:#EFF6FF;border:1px solid #93C5FD;color:#1D4ED8;}
+.alert.sky{background:#F0F9FF;border:1px solid #7DD3FC;color:#0369A1;}
+.task-item{display:flex;align-items:flex-start;gap:12px;padding:10px 13px;background:var(--bg);border-radius:10px;margin-bottom:8px;}
+.task-item.done{opacity:.55;}
+.task-item.done .task-title{text-decoration:line-through;color:var(--muted);}
+.task-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px;}
+.task-check.checked{background:var(--mint);border-color:var(--mint);color:var(--navy);}
+.task-title{font-size:13px;font-weight:600;color:var(--navy);}
+.task-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+.prog-track{height:7px;background:var(--bg);border-radius:20px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:20px;}
+.bar-wrap{display:flex;align-items:center;gap:6px;}
+.bar-track{flex:1;max-width:80px;height:6px;background:var(--bg);border-radius:20px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:20px;}
+.bar-pct{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;min-width:30px;}
+.rank-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;margin-bottom:7px;border:1px solid var(--border);background:var(--bg);}
+.rank-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;flex-shrink:0;}
+.rank-info{flex:1;}
+.rank-name{font-size:13px;font-weight:700;color:var(--navy);}
+.rank-sub{font-size:11px;color:var(--muted);}
+.rank-pts{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--teal);text-align:right;}
+.ma-item{display:flex;align-items:flex-start;gap:12px;padding:11px 13px;border-radius:10px;margin-bottom:8px;border:1px solid var(--border);}
+.ma-item.critical{border-color:var(--red);background:#FEF2F2;}
+.ma-item.warning{border-color:var(--orange);background:#FFFBEB;}
+.ma-ico{font-size:18px;flex-shrink:0;}
+.ma-body{flex:1;}
+.ma-title{font-size:13px;font-weight:700;color:var(--navy);}
+.ma-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.cons-card{background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);}
+.cons-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+.cons-stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center;}
+.cons-stat-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px;}
+.cons-stat-val{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;}
+.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.fsel{padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--text);background:#fff;outline:none;}
+.fsearch{padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);background:#fff;outline:none;width:200px;}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.page-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--navy);}
+.page-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.tab-bar{display:flex;gap:4px;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:18px;width:fit-content;}
+.tab-item{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted);border:none;background:transparent;font-family:'DM Sans',sans-serif;}
+.tab-item.active{background:var(--surface);color:var(--navy);box-shadow:0 1px 6px rgba(15,31,69,.1);}
+.nps-sel{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+.nps-btn{width:38px;height:38px;border-radius:8px;border:2px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+.nps-btn.sel-low{background:#FEF2F2;border-color:var(--red);color:var(--red);}
+.nps-btn.sel-mid{background:#FEF3C7;border-color:var(--yellow);color:#92400E;}
+.nps-btn.sel-high{background:#DCFCE7;border-color:var(--green);color:var(--green);}
+.reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+.reason-btn{padding:10px 12px;border:2px solid var(--border);border-radius:9px;background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;text-align:left;color:var(--navy);}
+.reason-btn.selected{border-color:var(--red);background:#FEF2F2;color:var(--red);}
+.log-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;}
+.log-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.log-dot.ok{background:var(--green);}
+.log-dot.fail{background:var(--red);}
+.log-dot.pw{background:var(--orange);}
+.log-time{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-width:110px;}
+.log-user{font-weight:700;color:var(--navy);min-width:90px;}
+.log-action{color:var(--muted);flex:1;}
+.pw-bar{height:4px;border-radius:2px;margin-top:5px;}
+.pw-lbl{font-size:10px;font-weight:700;margin-top:2px;}
+.ups-row{display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--bg);border-radius:10px;margin-bottom:7px;}
+.ups-icon{font-size:18px;flex-shrink:0;}
+.ups-info{flex:1;}
+.ups-name{font-size:12px;font-weight:700;color:var(--navy);}
+.ups-sub{font-size:10px;color:var(--muted);}
+.ups-pct{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;min-width:46px;text-align:right;}
+.dest-bar{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);}
+.dest-bar:last-child{border-bottom:none;}
+.dest-name{width:160px;font-size:12px;font-weight:600;color:var(--navy);flex-shrink:0;}
+.dest-track{flex:1;height:10px;background:var(--bg);border-radius:20px;overflow:hidden;}
+.dest-fill{height:100%;background:var(--teal);border-radius:20px;}
+.dest-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--muted);min-width:50px;text-align:right;}
+.ring-wrap{position:relative;width:90px;height:90px;margin:12px auto;}
+.ring-wrap svg{transform:rotate(-90deg);}
+.ring-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--navy);}
+.divider{height:1px;background:var(--border);margin:16px 0;}
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
+.empty-icon{font-size:40px;margin-bottom:10px;}
+.empty-text{font-size:14px;font-weight:600;}
+.page-anim{animation:pageIn .2s ease;}
+@keyframes pageIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.cemetery-hd{background:linear-gradient(135deg,#1a1a2e,#2d1b4e);border-radius:var(--radius);padding:18px;color:#fff;margin-bottom:14px;}
+.hamburger{display:none;padding:8px;background:transparent;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-size:16px;}
+.team-card{background:var(--surface);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);border-left:4px solid var(--teal);}
+.team-card-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.team-av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;color:#fff;width:44px;height:44px;font-size:14px;}
+.team-name{font-size:15px;font-weight:800;color:var(--navy);}
+.team-role{font-size:11px;color:var(--muted);}
+.team-info-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:5px;}
+.sec-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(2,195,154,.1);border:1px solid rgba(2,195,154,.25);border-radius:20px;font-size:11px;font-weight:700;color:var(--mint);}
+.info-box{background:linear-gradient(135deg,rgba(2,128,144,.07),rgba(2,195,154,.05));border:1px solid rgba(2,128,144,.2);border-radius:12px;padding:14px 18px;margin-bottom:16px;}
+.info-box-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--teal);margin-bottom:6px;}
+.info-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:5px;}
+.info-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;min-width:60px;}
+.info-val{font-family:'DM Mono',monospace;font-weight:700;color:var(--navy);}
+@media(max-width:900px){
+  #sidebar{transform:translateX(-100%);}
+  #sidebar.open{transform:translateX(0);}
+  #main-content{margin-left:0;}
+  .grid-4,.grid-3,.grid-2{grid-template-columns:1fr;}
+  .page-content{padding:16px;}
+  .frow-2,.frow-3{grid-template-columns:1fr;}
+  .hamburger{display:block;}
+}
+@keyframes toastIn{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+.toast{padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.2);animation:toastIn .3s ease;max-width:320px;}
+.toast.success{background:var(--mint);color:var(--navy);}
+.toast.error{background:var(--red);}
+.toast.warn{background:var(--orange);color:var(--navy);}
+.toast.info{background:var(--teal);}
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card" id="auth-box">
+    <div class="login-logo">
+      <div class="login-logo-dot"></div>
+      <div>
+        <div class="login-logo-text">CVM Vendas <span class="v3b">v3</span></div>
+        <div class="login-logo-sub">Clube Viajar Mais — Sistema Comercial</div>
+      </div>
+    </div>
+    <div class="login-title">Bem-vindo de volta</div>
+    <div class="login-sub">Entre com seu e-mail e senha para acessar.</div>
+    <div class="form-group"><label class="form-label">E-mail</label><input type="email" id="login-email" class="form-input" placeholder="seu@email.com.br" autocomplete="username"/></div>
+    <div class="form-group"><label class="form-label">Senha</label><input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/></div>
+    <button class="login-btn" id="login-btn">Entrar →</button>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-demo">
+      <div class="login-demo-title">Acessos de demonstração</div>
+      <div class="demo-pills">
+        <span class="demo-pill" id="dp1">👑 Admin (Rafael)</span>
+        <span class="demo-pill" id="dp2">🏢 Gerente (Rafaella)</span>
+        <span class="demo-pill" id="dp3">👤 Consultor (Antônio)</span>
+        <span class="demo-pill" id="dp4">👤 Consultor (Gabriel)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <aside id="sidebar">
+    <div class="sb-header">
+      <div class="sb-logo">
+        <div class="sb-dot"></div>
+        <div>
+          <div class="sb-logo-text">CVM <span class="v3b">v3</span></div>
+          <div class="sb-logo-sub">Plataforma Comercial</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-store">
+      <div class="sb-store-lbl">Filtrar loja</div>
+      <select class="store-sel" id="sb-store-sel"></select>
+    </div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-footer">
+      <div class="u-info">
+        <div class="u-avatar" id="sb-av" style="width:34px;height:34px;font-size:11px;"></div>
+        <div style="flex:1;min-width:0;"><div class="u-name" id="sb-name"></div><div class="u-role" id="sb-role"></div></div>
+        <button class="logout-btn" id="logout-btn" title="Sair">⏻</button>
+      </div>
+    </div>
+  </aside>
+  <main id="main-content">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger" id="hamburger-btn">☰</button>
+        <div class="topbar-title" id="topbar-title">Dashboard</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-primary btn-sm hidden" id="topbar-add">+ Novo Lead</button>
+        <span id="topbar-date" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+    <div class="page-content page-anim" id="page-content"></div>
+  </main>
+</div>
+
+<div id="modal-overlay" class="hidden">
+  <div class="modal" id="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title"></div>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+(function(){
+'use strict';
+
+// ── CONSTANTS ──────────────────────────────────────────────────────────────────
+
+var STAGES = [
+  {id:'novo',label:'Novo Lead',icon:'✨',col:'#6B7FA8'},
+  {id:'contato',label:'1º Contato',icon:'📞',col:'#028090'},
+  {id:'proposta',label:'Proposta Enviada',icon:'📋',col:'#F4A261'},
+  {id:'negociacao',label:'Em Negociação',icon:'🤝',col:'#F9C74F'},
+  {id:'pagamento',label:'Aguard. Pagamento',icon:'💳',col:'#8B5CF6'},
+  {id:'fechado',label:'Fechado',icon:'🏆',col:'#16A34A'},
+  {id:'posvenda',label:'Em Viagem / Pós-Venda',icon:'✈️',col:'#0EA5E9'},
+  {id:'perdido',label:'Perdido',icon:'❌',col:'#E53935'}
+];
+
+var LOSS_REASONS = [
+  'Preço mais barato na concorrência',
+  'Comprou em OTA (Decolar/Booking)',
+  'Tempo de resposta lento',
+  'Cancelou a viagem',
+  'Falta de crédito / condições',
+  'Destino sem disponibilidade',
+  'Não respondeu mais (sumiu)',
+  'Outra agência do grupo familiar',
+  'Adiou para outra data',
+  'Outro motivo'
+];
+
+var DEST = ['Nordeste (Fortaleza/Natal/Maceió)','Porto Seguro','Fernando de Noronha','Pantanal','Bonito (MS)','Florianópolis','Rio de Janeiro','São Paulo (Negócios)','Argentina / Buenos Aires','Disney / EUA','Caribe / Cancún','Europa (Portugal/Espanha)','Europa (Itália/França)','Cruzeiro','Outro Nacional','Outro Internacional'];
+var PRODUCTS = ['Pacote Completo','Passagem Aérea','Hotel','Seguro Viagem','Transfer In/Out','Estacionamento','Chip Internacional','Passeios Extras','Cruzeiro Add-on'];
+var SOURCES = ['WhatsApp Ativo','Instagram','Indicação','Presencial na Loja','Reativação Base','Grupo de Ofertas','Site / Link Bio','Outro'];
+var ROLES = {admin:'Administrador',manager:'Gerente',consultant:'Consultor',posvenda:'Pós-Vendas'};
+var UPSELL_GOALS = {
+  'Seguro Viagem':{icon:'🛡️',goal:60},
+  'Transfer In/Out':{icon:'🚌',goal:40},
+  'Chip Internacional':{icon:'📱',goal:50},
+  'Passeios Extras':{icon:'🎡',goal:30}
+};
+
+// ── DEFAULT DATA ───────────────────────────────────────────────────────────────
+
+var DEFAULT_USERS = [
+  {id:'u1',name:'Rafael Oliveira',email:'rafael@cvm.com.br',phone:'(31) 99999-0001',password:'admin2026',role:'admin',stores:['bv','sl','bh'],active:true,avatar:'RO',color:'#0F1F45'},
+  {id:'u2',name:'Rafaella',email:'rafaella@cvm.com.br',phone:'(31) 99999-0002',password:'cvm2026',role:'manager',stores:['bv','sl'],active:true,avatar:'R',color:'#028090'},
+  {id:'u3',name:'Antônio',email:'antonio@cvm.com.br',phone:'(31) 99999-0003',password:'cvm2026',role:'consultant',stores:['bh'],active:true,avatar:'AT',color:'#1D4ED8'},
+  {id:'u4',name:'Gabriel',email:'gabriel@cvm.com.br',phone:'(31) 99999-0004',password:'cvm2026',role:'consultant',stores:['sl'],active:true,avatar:'G',color:'#8B5CF6'},
+  {id:'u5',name:'Fernanda',email:'fernanda@cvm.com.br',phone:'(31) 99999-0005',password:'cvm2026',role:'consultant',stores:['sl'],active:false,onLeave:true,leaveReturn:'2026-04-21',avatar:'F',color:'#E53935'},
+  {id:'u6',name:'Samuel',email:'samuel@cvm.com.br',phone:'(31) 99999-0006',password:'cvm2026',role:'consultant',stores:['bv'],active:true,inTraining:true,avatar:'S',color:'#16A34A'},
+  {id:'u7',name:'Aline',email:'aline@cvm.com.br',phone:'(31) 99999-0007',password:'cvm2026',role:'consultant',stores:['bv'],active:false,onLeave:true,leaveReturn:'2026-04-30',avatar:'A',color:'#F4A261'},
+  {id:'u8',name:'Maria Eduarda',email:'madu@cvm.com.br',phone:'(31) 99999-0008',password:'cvm2026',role:'posvenda',stores:['bv','sl','bh'],active:true,avatar:'ME',color:'#F9C74F'},
+  {id:'u9',name:'Ana Beatriz',email:'anabeatriz@cvm.com.br',phone:'(31) 99999-0009',password:'cvm2026',role:'posvenda',stores:['bv','sl'],active:false,onLeave:true,leaveReturn:'2026-04-11',avatar:'AB',color:'#E91E63'}
+];
+
+var DEFAULT_STORES = [
+  {id:'bv',name:'CVM Boa Vista',short:'BV',color:'#028090',location:'Sete Lagoas'},
+  {id:'sl',name:'CVM Shopping SL',short:'SL',color:'#F4A261',location:'Sete Lagoas'},
+  {id:'bh',name:'CVM Assaí Minas (BH)',short:'BH',color:'#8B5CF6',location:'Belo Horizonte'}
+];
+
+var DEFAULT_GOALS = {
+  stores:{
+    bv:{monthly:470430,quarterly:1411290,semiannual:2822580,annual:5645160,salesQty:30,seasonality:{1:0.8,2:0.85,3:0.9,4:1.0,5:1.05,6:1.1,7:1.3,8:1.2,9:0.9,10:0.95,11:1.0,12:1.15}},
+    sl:{monthly:470430,quarterly:1411290,semiannual:2822580,annual:5645160,salesQty:24,seasonality:{1:0.8,2:0.85,3:0.9,4:1.0,5:1.05,6:1.1,7:1.3,8:1.2,9:0.9,10:0.95,11:1.0,12:1.15}},
+    bh:{monthly:150000,quarterly:450000,semiannual:900000,annual:1800000,salesQty:15,seasonality:{1:0.8,2:0.85,3:0.9,4:1.0,5:1.05,6:1.1,7:1.3,8:1.2,9:0.9,10:0.95,11:1.0,12:1.15}}
+  },
+  consultants:{
+    u2:{gmv:450000,salesQty:28,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30},
+    u3:{gmv:150000,salesQty:15,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30},
+    u4:{gmv:235215,salesQty:12,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30},
+    u5:{gmv:150000,salesQty:8,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30},
+    u6:{gmv:100000,salesQty:8,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30},
+    u7:{gmv:235215,salesQty:15,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30},
+    u8:{gmv:50000,salesQty:5,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30}
+  }
+};
+
+// Dados zerados — plataforma pronta para uso real
+var SAMPLE_LEADS = [];
+var SAMPLE_TASKS = [];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+
+var S = {user:null,view:'dashboard',store:'',dragId:null,lossReason:'',npsVal:null};
+var _otp = null; // {user, code, expires, attempts}
+
+// ── STORAGE ───────────────────────────────────────────────────────────────────
+
+function gls(k){try{var v=localStorage.getItem('cvm3_'+k);return v?JSON.parse(v):null;}catch(e){return null;}}
+function sls(k,v){try{localStorage.setItem('cvm3_'+k,JSON.stringify(v));}catch(e){}}
+function getUsers(){return gls('users')||DEFAULT_USERS;}
+function getStores(){return gls('stores')||DEFAULT_STORES;}
+function getLeads(){return gls('leads')||SAMPLE_LEADS;}
+function getGoals(){return gls('goals')||DEFAULT_GOALS;}
+function getTasks(){return gls('tasks')||SAMPLE_TASKS;}
+function getLogs(){return gls('logs')||[];}
+function saveUsers(v){sls('users',v);}
+function saveLeads(v){sls('leads',v);}
+function saveGoals(v){sls('goals',v);}
+function saveTasks(v){sls('tasks',v);}
+function saveLogs(v){sls('logs',v);}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+
+function fmtM(v){v=Math.round(v)||0;if(v>=1000000)return 'R$'+(v/1000000).toFixed(1)+'M';if(v>=1000)return 'R$'+(v/1000).toFixed(0)+'k';return 'R$'+v;}
+function fmtDate(d){if(!d)return '—';var dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function fmtDateS(d){if(!d)return '—';var dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+function daysSince(d){if(!d)return 0;return Math.floor((Date.now()-new Date(d+'T00:00:00').getTime())/86400000);}
+function today(){return new Date().toISOString().split('T')[0];}
+function nowISO(){return new Date().toISOString();}
+function genId(){return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+function colorPct(p){return p>=100?'var(--green)':p>=75?'var(--teal)':p>=50?'var(--orange)':'var(--red)';}
+function cleanWA(n){return (n||'').replace(/\D/g,'');}
+function fmtWA(n){var c=cleanWA(n);if(c.length===11)return '('+c.slice(0,2)+') '+c.slice(2,7)+'-'+c.slice(7);if(c.length===10)return '('+c.slice(0,2)+') '+c.slice(2,6)+'-'+c.slice(6);return n;}
+function validWA(n){var c=cleanWA(n);return c.length===10||c.length===11;}
+function checkDup(wa,excId){var c=cleanWA(wa);return getLeads().find(function(l){return l.id!==excId&&cleanWA(l.whatsapp||'')===c&&!l.lost;});}
+function getUserById(id){return getUsers().find(function(u){return u.id===id;});}
+function getStoreById(id){return getStores().find(function(s){return s.id===id;});}
+function getStageById(id){return STAGES.find(function(s){return s.id===id;});}
+function hoursInStage(lead){if(!lead.entryDateTime)return 0;return (Date.now()-new Date(lead.entryDateTime).getTime())/3600000;}
+function isStaleNew(lead){return lead.stage==='novo'&&!lead.lost&&hoursInStage(lead)>2;}
+function npsClass(n){if(n===null||n===undefined)return 'npsna';if(n>=9)return 'nps9';if(n>=7)return 'nps7';return 'npslow';}
+function avgNPS(leads){var r=leads.filter(function(l){return l.nps!==null&&l.nps!==undefined;});if(!r.length)return null;return (r.reduce(function(a,l){return a+(l.nps||0);},0)/r.length).toFixed(1);}
+function calcUpsell(closed){var tot=closed.length||1;return Object.keys(UPSELL_GOALS).map(function(prod){var m=UPSELL_GOALS[prod];var cnt=closed.filter(function(l){return (l.products||[]).indexOf(prod)>=0;}).length;return {product:prod,icon:m.icon,goal:m.goal,count:cnt,pct:Math.round(cnt/tot*100)};});}
+function canExport(){var r=S.user&&S.user.role;return r==='admin'||r==='manager';}
+function pwStrength(pw){var s=0;if(pw.length>=8)s++;if(pw.length>=12)s++;if(/[A-Z]/.test(pw))s++;if(/[0-9]/.test(pw))s++;if(/[^A-Za-z0-9]/.test(pw))s++;return s;}
+
+// ── HTML HELPERS (NO nested template literals) ────────────────────────────────
+
+function kpi(cls,icon,label,val,sub,extra){
+  var h='<div class="kpi'+cls+'">';
+  h+='<div class="kpi-icon">'+icon+'</div>';
+  h+='<div class="kpi-label">'+label+'</div>';
+  h+='<div class="kpi-val">'+val+'</div>';
+  if(sub)h+='<div class="kpi-sub">'+sub+'</div>';
+  if(extra)h+='<div class="kpi-trend">'+extra+'</div>';
+  return h+'</div>';
+}
+function progRow(label,real,goal,color){
+  var pct=goal>0?Math.min(Math.round(real/goal*100),100):0;
+  var h='<div style="margin-bottom:10px;">';
+  h+='<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px;">';
+  h+='<span>'+label+'</span><span>'+fmtM(real)+' / '+fmtM(goal)+'</span></div>';
+  h+='<div class="prog-track"><div class="prog-fill" style="width:'+pct+'%;background:'+color+';"></div></div>';
+  h+='<div style="text-align:right;font-size:12px;font-weight:800;margin-top:3px;color:'+colorPct(pct)+';">'+pct+'%</div>';
+  return h+'</div>';
+}
+function npsHtml(n){
+  if(n===null||n===undefined)return '';
+  return '<div class="nps-badge '+npsClass(n)+'">'+n+'</div>';
+}
+function pillHtml(text,cls){return '<span class="pill '+cls+'">'+text+'</span>';}
+function avHtml(u,sz){
+  sz=sz||34;
+  return '<div class="u-avatar" style="background:'+u.color+';width:'+sz+'px;height:'+sz+'px;font-size:'+(sz<30?9:11)+'px;">'+u.avatar+'</div>';
+}
+
+// ── AUDIT LOG ─────────────────────────────────────────────────────────────────
+
+function logEvent(action,extra){
+  var logs=getLogs();
+  logs.unshift({id:genId(),userId:S.user&&S.user.id,userName:S.user&&S.user.name,userEmail:S.user&&S.user.email,userRole:S.user&&S.user.role,action:action,extra:extra||'',timestamp:nowISO(),device:navigator.userAgent.substring(0,80)});
+  if(logs.length>500)logs.length=500;
+  saveLogs(logs);
+}
+function logAuth(user,email,action,extra){
+  var logs=getLogs();
+  logs.unshift({id:genId(),userId:user&&user.id,userName:user&&user.name,userEmail:(user&&user.email)||email,userRole:user&&user.role,action:action,extra:extra||'',timestamp:nowISO(),device:navigator.userAgent.substring(0,80)});
+  if(logs.length>500)logs.length=500;
+  saveLogs(logs);
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+
+function doLogin(){
+  var emailEl=document.getElementById('login-email');
+  var passEl=document.getElementById('login-pass');
+  var errEl=document.getElementById('login-error');
+  if(!emailEl||!passEl)return;
+  var email=emailEl.value.trim().toLowerCase();
+  var pass=passEl.value;
+  var user=getUsers().find(function(u){return u.email.toLowerCase()===email&&u.password===pass;});
+  if(!user){
+    logAuth(null,email,'login_fail','');
+    errEl.style.display='block';
+    errEl.textContent='E-mail ou senha incorretos.';
+    return;
+  }
+  var code=String(Math.floor(100000+Math.random()*900000));
+  _otp={user:user,code:code,expires:Date.now()+5*60*1000,attempts:0};
+  errEl.style.display='none';
+  showOTP(user,code);
+}
+
+function showOTP(user,code){
+  var box=document.getElementById('auth-box');
+  var h='';
+  h+='<div class="otp-icon">🔐</div>';
+  h+='<div class="otp-title">Verificação de Acesso</div>';
+  h+='<div class="otp-sub">Olá, <strong style="color:#fff;">'+user.name+'</strong>!<br/>Código enviado para <span style="color:var(--mint);">'+user.email+'</span></div>';
+  h+='<div class="otp-demo-box">';
+  h+='<div class="otp-demo-label">🧪 Modo Demo — em produção chegaria por e-mail</div>';
+  h+='<div class="otp-code">'+code+'</div>';
+  h+='<div class="otp-exp">Válido por 5 minutos</div>';
+  h+='</div>';
+  h+='<div style="text-align:left;"><label class="form-label">Código de 6 dígitos</label></div>';
+  h+='<input type="text" id="otp-in" class="otp-input" maxlength="6" placeholder="000000"/>';
+  h+='<div class="otp-err" id="otp-err"></div>';
+  h+='<button class="login-btn" id="otp-confirm-btn" style="margin-top:16px;">✓ Confirmar</button>';
+  h+='<br/><button class="otp-back" id="otp-back-btn">← Voltar</button>';
+  box.className='otp-card';
+  box.innerHTML=h;
+  var inp=document.getElementById('otp-in');
+  var confirmBtn=document.getElementById('otp-confirm-btn');
+  var backBtn=document.getElementById('otp-back-btn');
+  if(inp){
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter')verifyOTP();});
+    inp.focus();
+  }
+  if(confirmBtn)confirmBtn.addEventListener('click',verifyOTP);
+  if(backBtn)backBtn.addEventListener('click',resetAuth);
+}
+
+function verifyOTP(){
+  if(!_otp){resetAuth();return;}
+  if(Date.now()>_otp.expires){
+    logAuth(_otp.user,null,'otp_expired','');
+    _otp=null;
+    alert('Código expirado. Faça login novamente.');
+    resetAuth();
+    return;
+  }
+  var inEl=document.getElementById('otp-in');
+  var entered=inEl?inEl.value.trim():'';
+  if(entered!==_otp.code){
+    _otp.attempts++;
+    logAuth(_otp.user,null,'otp_fail','Tentativa '+_otp.attempts);
+    var errEl=document.getElementById('otp-err');
+    if(errEl){errEl.style.display='block';errEl.textContent='Código inválido. Tentativa '+_otp.attempts+'/3.';}
+    if(_otp.attempts>=3){
+      logAuth(_otp.user,null,'login_blocked','Excedeu tentativas OTP');
+      _otp=null;
+      alert('Acesso bloqueado. Tente novamente.');
+      resetAuth();
+    }
+    return;
+  }
+  var user=_otp.user;
+  _otp=null;
+  logAuth(user,null,'login_ok','');
+  S.user=user;
+  sls('session',user.id);
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.remove('hidden');
+  initApp();
+}
+
+function resetAuth(){
+  _otp=null;
+  var box=document.getElementById('auth-box');
+  box.className='login-card';
+  var h='';
+  h+='<div class="login-logo">';
+  h+='<div class="login-logo-dot"></div>';
+  h+='<div><div class="login-logo-text">CVM Vendas <span class="v3b">v3</span></div><div class="login-logo-sub">Clube Viajar Mais</div></div>';
+  h+='</div>';
+  h+='<div class="login-title">Bem-vindo de volta</div>';
+  h+='<div class="login-sub">Entre com seu e-mail e senha.</div>';
+  h+='<div class="form-group"><label class="form-label">E-mail</label><input type="email" id="login-email" class="form-input" placeholder="seu@email.com.br" autocomplete="username"/></div>';
+  h+='<div class="form-group"><label class="form-label">Senha</label><input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/></div>';
+  h+='<button class="login-btn" id="login-btn">Entrar →</button>';
+  h+='<div class="login-error" id="login-error"></div>';
+  h+='<div class="login-demo"><div class="login-demo-title">Acessos de demonstração</div><div class="demo-pills">';
+  h+='<span class="demo-pill" id="dp1">👑 Admin (Rafael)</span>';
+  h+='<span class="demo-pill" id="dp2">🏢 Gerente (Rafaella)</span>';
+  h+='<span class="demo-pill" id="dp3">👤 Consultor (Antônio)</span>';
+  h+='<span class="demo-pill" id="dp4">👤 Consultor (Gabriel)</span>';
+  h+='</div></div>';
+  box.innerHTML=h;
+  bindLoginEvents();
+}
+
+function bindLoginEvents(){
+  var btn=document.getElementById('login-btn');
+  var passEl=document.getElementById('login-pass');
+  var dp1=document.getElementById('dp1');
+  var dp2=document.getElementById('dp2');
+  var dp3=document.getElementById('dp3');
+  var dp4=document.getElementById('dp4');
+  if(btn)btn.addEventListener('click',doLogin);
+  if(passEl)passEl.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+  if(dp1)dp1.addEventListener('click',function(){fillDemo('rafael@cvm.com.br','admin2026');});
+  if(dp2)dp2.addEventListener('click',function(){fillDemo('rafaella@cvm.com.br','cvm2026');});
+  if(dp3)dp3.addEventListener('click',function(){fillDemo('antonio@cvm.com.br','cvm2026');});
+  if(dp4)dp4.addEventListener('click',function(){fillDemo('gabriel@cvm.com.br','cvm2026');});
+}
+
+function fillDemo(e,p){
+  var emailEl=document.getElementById('login-email');
+  var passEl=document.getElementById('login-pass');
+  if(emailEl)emailEl.value=e;
+  if(passEl)passEl.value=p;
+}
+
+function doLogout(){
+  logEvent('logout','');
+  S.user=null;
+  sls('session',null);
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-screen').style.display='flex';
+  resetAuth();
+}
+
+// ── APP INIT ──────────────────────────────────────────────────────────────────
+
+function initApp(){
+  var u=S.user;
+  var av=document.getElementById('sb-av');
+  if(av){av.textContent=u.avatar;av.style.background=u.color;}
+  var nameEl=document.getElementById('sb-name');
+  var roleEl=document.getElementById('sb-role');
+  if(nameEl)nameEl.textContent=u.name;
+  if(roleEl)roleEl.textContent=ROLES[u.role]||u.role;
+  var sel=document.getElementById('sb-store-sel');
+  if(sel){
+    sel.innerHTML='<option value="">Todas as Lojas</option>';
+    getStores().filter(function(s){return u.role==='admin'||u.stores.indexOf(s.id)>=0;}).forEach(function(s){
+      var o=document.createElement('option');
+      o.value=s.id;
+      o.textContent=s.short+' — '+s.name;
+      sel.appendChild(o);
+    });
+    if(u.role==='consultant'&&u.stores&&u.stores.length===1){sel.value=u.stores[0];S.store=u.stores[0];sel.disabled=true;}
+    sel.addEventListener('change',function(){S.store=this.value;navigate(S.view);});
+  }
+  document.getElementById('topbar-date').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'long'});
+  var logoutBtn=document.getElementById('logout-btn');
+  var hamBtn=document.getElementById('hamburger-btn');
+  var topAdd=document.getElementById('topbar-add');
+  if(logoutBtn)logoutBtn.addEventListener('click',doLogout);
+  if(hamBtn)hamBtn.addEventListener('click',function(){document.getElementById('sidebar').classList.toggle('open');});
+  if(topAdd)topAdd.addEventListener('click',function(){openLeadForm(null);});
+  var modalClose=document.getElementById('modal-close-btn');
+  var modalOverlay=document.getElementById('modal-overlay');
+  if(modalClose)modalClose.addEventListener('click',closeModal);
+  if(modalOverlay)modalOverlay.addEventListener('click',function(e){if(e.target===modalOverlay)closeModal();});
+  renderNav();
+  navigate('dashboard');
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────────
+
+function navItems(){
+  var role=S.user.role;
+  var leads=getLeads();
+  var myLeads=leads.filter(function(l){
+    if(role==='admin')return true;
+    if(role==='consultant'||role==='posvenda')return l.consultantId===S.user.id||l.storeId===S.user.stores[0];
+    return S.user.stores.indexOf(l.storeId)>=0;
+  });
+  var stale=myLeads.filter(function(l){return isStaleNew(l);}).length;
+  var overdue=myLeads.filter(function(l){return !l.lost&&l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado';}).length;
+  var tasks=getTasks().filter(function(t){return t.date===today()&&!t.completed&&(role==='admin'||role==='manager'||t.consultantId===S.user.id);}).length;
+  var pv=myLeads.filter(function(l){return l.stage==='posvenda';}).length;
+  var alerts=stale+(overdue>0?1:0);
+  var allItems=[
+    {id:'dashboard',label:'Dashboard',icon:'📊',roles:['admin','manager','consultant']},
+    {id:'manager',label:'Painel do Gestor',icon:'👀',roles:['admin','manager'],badge:alerts,badgeCls:alerts>0?'warn':''},
+    {id:'kanban',label:'Funil Kanban',icon:'🎯',roles:['admin','manager','consultant'],badge:stale>0?stale:0},
+    {id:'posvenda',label:'Pós-Venda',icon:'✈️',roles:['admin','manager','consultant','posvenda'],badge:pv},
+    {id:'leads',label:'Todos os Leads',icon:'👥',roles:['admin','manager','consultant']},
+    {id:'tasks',label:'Tarefas do Dia',icon:'✅',roles:['admin','manager','consultant','posvenda'],badge:tasks},
+    {id:'goals',label:'Metas',icon:'📈',roles:['admin','manager','consultant']},
+    {id:'commissions',label:'Comissões',icon:'💰',roles:['admin','manager','consultant']},
+    {id:'analytics',label:'Analytics',icon:'🔍',roles:['admin','manager']},
+    {id:'team',label:'Equipe',icon:'👔',roles:['admin','manager']},
+    {id:'account',label:'Minha Conta',icon:'🔑',roles:['admin','manager','consultant','posvenda']},
+    {id:'accesslogs',label:'Logs de Acesso',icon:'🛡️',roles:['admin']},
+    {id:'settings',label:'Configurações',icon:'⚙️',roles:['admin']}
+  ];
+  return allItems.filter(function(i){return i.roles.indexOf(role)>=0;});
+}
+
+function renderNav(){
+  var items=navItems();
+  var h='';
+  items.forEach(function(i){
+    var act=S.view===i.id?' active':'';
+    h+='<div class="nav-item'+act+'" data-view="'+i.id+'">';
+    h+='<span class="nav-icon">'+i.icon+'</span><span>'+i.label+'</span>';
+    if(i.badge>0)h+='<span class="nav-badge'+(i.badgeCls?' '+i.badgeCls:'')+'">'+i.badge+'</span>';
+    h+='</div>';
+  });
+  var nav=document.getElementById('sb-nav');
+  if(nav){
+    nav.innerHTML=h;
+    nav.querySelectorAll('.nav-item').forEach(function(el){
+      el.addEventListener('click',function(){navigate(el.getAttribute('data-view'));});
+    });
+  }
+}
+
+function navigate(view){
+  S.view=view;
+  renderNav();
+  var items=navItems();
+  var found=items.find(function(i){return i.id===view;});
+  document.getElementById('topbar-title').textContent=found?found.label:view;
+  var addBtn=document.getElementById('topbar-add');
+  if(addBtn){
+    if(view==='kanban'||view==='leads')addBtn.classList.remove('hidden');
+    else addBtn.classList.add('hidden');
+  }
+  var pc=document.getElementById('page-content');
+  if(pc){pc.classList.remove('page-anim');void pc.offsetWidth;pc.classList.add('page-anim');}
+  var fns={dashboard:renderDashboard,manager:renderManager,kanban:renderKanban,posvenda:renderPostSale,leads:renderLeads,tasks:renderTasks,goals:renderGoals,commissions:renderCommissions,analytics:renderAnalytics,team:renderTeam,account:renderAccount,accesslogs:renderAccessLogs,settings:renderSettings};
+  var fn=fns[view];
+  if(fn)fn();else renderDashboard();
+}
+
+function visLeads(all){
+  var leads=getLeads();
+  var u=S.user;
+  if(u.role==='consultant')leads=leads.filter(function(l){return l.consultantId===u.id;});
+  else if(u.role==='manager')leads=leads.filter(function(l){return u.stores.indexOf(l.storeId)>=0;});
+  if(S.store)leads=leads.filter(function(l){return l.storeId===S.store;});
+  if(!all)leads=leads.filter(function(l){return !l.lost||daysSince(l.lostDate)<15;});
+  return leads;
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+
+function renderDashboard(){
+  var leads=visLeads();
+  var closed=leads.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+  var active=leads.filter(function(l){return !l.lost&&l.stage!=='fechado'&&l.stage!=='posvenda';});
+  var totalGMV=closed.reduce(function(a,l){return a+(l.gmv||0);},0);
+  var pipeline=active.reduce(function(a,l){return a+(l.budget||0);},0);
+  var dueToday=leads.filter(function(l){return !l.lost&&l.nextFollowup===today()&&l.stage!=='fechado';});
+  var overdue=leads.filter(function(l){return !l.lost&&l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado';});
+  var stale=leads.filter(function(l){return isStaleNew(l);});
+  var pvLeads=leads.filter(function(l){return l.stage==='posvenda';});
+  var insur=calcUpsell(closed).find(function(u){return u.product==='Seguro Viagem';})||{pct:0};
+  var npsAvg=avgNPS(pvLeads);
+  var goals=getGoals();
+  var storeGoal=S.store?(goals.stores[S.store]&&goals.stores[S.store].monthly||0):Object.keys(goals.stores).reduce(function(a,k){return a+(goals.stores[k].monthly||0);},0);
+  var pctGoal=storeGoal>0?Math.round(totalGMV/storeGoal*100):0;
+  var allUsers=getUsers().filter(function(u){return u.role!=='admin';});
+  var rankData=allUsers.map(function(u){
+    var ul=leads.filter(function(l){return l.consultantId===u.id;});
+    var cl=ul.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var pts=ul.reduce(function(a,l){var map={novo:5,contato:10,proposta:20,negociacao:30,pagamento:40,fechado:100,posvenda:100};return a+(map[l.stage]||5)+Math.floor((l.gmv||0)/10000)*10;},0);
+    return {user:u,pts:pts,cnt:cl.length,gmv:cl.reduce(function(a,l){return a+(l.gmv||0);},0),nps:avgNPS(leads.filter(function(l){return l.consultantId===u.id;}))};
+  }).sort(function(a,b){return b.pts-a.pts;});
+  var medals=['🥇','🥈','🥉'];
+  var trendHtml=pctGoal>=100?'<span class="trend-up">'+pctGoal+'% da meta ✅</span>':'<span class="trend-down">'+pctGoal+'% da meta</span>';
+  var h='';
+  h+='<div class="page-header">';
+  h+='<div><div class="page-title">📊 Dashboard</div><div class="page-sub">'+new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})+'</div></div>';
+  h+='<button class="btn btn-primary btn-sm" id="dash-kanban-btn">Abrir Kanban →</button></div>';
+  h+='<div class="grid-4">';
+  h+=kpi(' green','💰','GMV Fechado Abril',fmtM(totalGMV),'Meta: '+fmtM(storeGoal),trendHtml);
+  h+=kpi('','🔥','Pipeline Ativo',fmtM(pipeline),active.length+' leads em andamento','');
+  h+=kpi(' orange'+(dueToday.length+overdue.length>0?' pulse':''),'⚠️','Follow-ups',dueToday.length+overdue.length,dueToday.length+' hoje · '+overdue.length+' atrasados','');
+  h+=kpi(' purple','🏆','Vendas Fechadas',closed.length,'Abril','');
+  h+='</div><div class="grid-4">';
+  h+=kpi(' red'+(stale.length>0?' pulse':''),'🚨','Leads Parados +2h',stale.length,stale.length>0?'Ação urgente!':'Tudo respondido ✓','');
+  h+=kpi(' sky','✈️','Clientes em Viagem',pvLeads.length,'Pós-venda ativo','');
+  h+=kpi(npsAvg!==null?(parseFloat(npsAvg)>=8?' green':' orange'):'','⭐','NPS Médio',npsAvg||'—',pvLeads.filter(function(l){return l.nps!==null;}).length+' avaliações','');
+  h+=kpi(insur.pct>=60?' green':' orange','🛡️','Penetração Seguro',insur.pct+'%','Meta: 60%','');
+  h+='</div><div class="grid-2">';
+  h+='<div class="card"><div class="card-title">🏆 Ranking — Abril</div>';
+  if(!rankData.length){h+='<div class="empty-state"><div class="empty-icon">👥</div></div>';}
+  else{
+    rankData.forEach(function(r,i){
+      h+='<div class="rank-item">';
+      h+='<div class="rank-num" style="background:'+r.user.color+';color:#fff;">'+(medals[i]||i+1)+'</div>';
+      h+='<div class="rank-info"><div class="rank-name">'+r.user.name+'</div><div class="rank-sub">'+r.cnt+' vendas · '+fmtM(r.gmv)+'</div></div>';
+      if(r.nps!==null)h+=npsHtml(parseFloat(r.nps));
+      h+='<div><div class="rank-pts">'+r.pts+'</div><div style="font-size:10px;color:var(--muted);">pts</div></div>';
+      h+='</div>';
+    });
+  }
+  h+='</div>';
+  h+='<div>';
+  if(stale.length>0){
+    h+='<div class="card" style="margin-bottom:14px;border-top:3px solid var(--red);">';
+    h+='<div class="card-title" style="color:var(--red);">🚨 Leads Novos Parados ('+stale.length+')</div>';
+    stale.slice(0,4).forEach(function(l){
+      var c=getUserById(l.consultantId);
+      h+='<div class="ma-item critical">';
+      h+='<div class="ma-ico">⏱️</div>';
+      h+='<div class="ma-body"><div class="ma-title">'+l.name+'</div>';
+      h+='<div class="ma-sub">'+( c?c.name:'?')+' · '+(l.destination||'—')+' · '+hoursInStage(l).toFixed(1)+'h</div></div>';
+      h+='<button class="btn btn-danger btn-sm lead-edit-btn" data-id="'+l.id+'">Ver</button>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='<div class="card"><div class="card-title">📊 Meta de Abril</div>';
+  h+=progRow('GMV realizado',totalGMV,storeGoal,'var(--teal)');
+  h+='</div>';
+  var myStores=getStores().filter(function(s){return S.user.role==='admin'||S.user.stores.indexOf(s.id)>=0;}).filter(function(s){return !S.store||s.id===S.store;});
+  if(myStores.length>1){
+    h+='<div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">';
+    myStores.forEach(function(s){
+      var sl=leads.filter(function(l){return l.storeId===s.id;});
+      var sc=sl.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+      var sg=sc.reduce(function(a,l){return a+(l.gmv||0);},0);
+      var gm=(goals.stores[s.id]&&goals.stores[s.id].monthly)||0;
+      var pct=gm>0?Math.round(sg/gm*100):0;
+      var staleS=sl.filter(function(l){return isStaleNew(l);}).length;
+      h+='<div class="card" style="border-left:4px solid '+s.color+';padding:14px;">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+      h+='<div style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;color:'+s.color+';">'+s.short+' — '+s.name+'</div>';
+      if(staleS>0)h+=pillHtml('🚨 '+staleS+' parados','pill-red');
+      h+='</div>';
+      h+='<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;">'+fmtM(sg)+'</div>';
+      h+='<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">'+sc.length+' vendas · Meta '+fmtM(gm)+'</div>';
+      h+='<div class="prog-track"><div class="prog-fill" style="width:'+Math.min(pct,100)+'%;background:'+s.color+';"></div></div>';
+      h+='<div style="text-align:right;font-size:12px;font-weight:800;margin-top:3px;color:'+colorPct(pct)+';">'+pct+'%</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div></div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var kBtn=document.getElementById('dash-kanban-btn');
+    if(kBtn)kBtn.addEventListener('click',function(){navigate('kanban');});
+    pc.querySelectorAll('.lead-edit-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-id')));});
+    });
+  }
+}
+
+// ── MANAGER ───────────────────────────────────────────────────────────────────
+
+function renderManager(){
+  var leads=visLeads();
+  var u=S.user;
+  var consultants=getUsers().filter(function(c){
+    return (c.role==='consultant'||c.role==='manager')&&c.id!==u.id&&(u.role==='admin'||u.stores.some(function(s){return c.stores&&c.stores.indexOf(s)>=0;}));
+  });
+  var alerts=[];
+  consultants.forEach(function(c){
+    var cl=leads.filter(function(l){return l.consultantId===c.id&&!l.lost;});
+    var stl=cl.filter(function(l){return isStaleNew(l);});
+    var ovd=cl.filter(function(l){return l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado';});
+    var stag=cl.filter(function(l){return l.lastContact&&daysSince(l.lastContact)>3&&l.stage!=='fechado'&&l.stage!=='posvenda';});
+    if(stl.length)alerts.push({type:'critical',icon:'🚨',title:c.name+' — '+stl.length+' lead(s) novo(s) sem contato há +2h',sub:stl.map(function(l){return l.name;}).join(', ')});
+    if(ovd.length)alerts.push({type:'warning',icon:'⏰',title:c.name+' — '+ovd.length+' follow-up(s) atrasado(s)',sub:ovd.map(function(l){return l.name;}).join(', ')});
+    if(stag.length)alerts.push({type:'warning',icon:'🧊',title:c.name+' — '+stag.length+' lead(s) sem contato há +3 dias',sub:stag.map(function(l){return l.name;}).join(', ')});
+  });
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">👀 Painel do Gestor</div><div class="page-sub">Visão em tempo real</div></div></div>';
+  if(!alerts.length){h+='<div class="alert ok"><div class="alert-ico">✅</div><div>Equipe em dia! Nenhum alerta crítico.</div></div>';}
+  else{
+    h+='<div class="card" style="margin-bottom:20px;border-top:3px solid var(--red);">';
+    h+='<div class="card-title">🚨 Alertas da Equipe ('+alerts.length+')</div>';
+    alerts.forEach(function(a){
+      h+='<div class="ma-item '+a.type+'">';
+      h+='<div class="ma-ico">'+a.icon+'</div>';
+      h+='<div class="ma-body"><div class="ma-title">'+a.title+'</div><div class="ma-sub">'+a.sub+'</div></div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='<div class="sec-lbl" style="margin-bottom:12px;">Atividade por Consultor</div><div class="grid-3">';
+  consultants.forEach(function(c){
+    var cl=leads.filter(function(l){return l.consultantId===c.id&&!l.lost;});
+    var activeC=cl.filter(function(l){return l.stage!=='fechado'&&l.stage!=='posvenda'&&l.stage!=='perdido';});
+    var closedC=cl.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var ovdC=cl.filter(function(l){return l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado';});
+    var staleC=cl.filter(function(l){return isStaleNew(l);});
+    var tasksC=getTasks().filter(function(t){return t.consultantId===c.id&&t.date===today();});
+    var doneC=tasksC.filter(function(t){return t.completed;});
+    var taskPct=tasksC.length>0?Math.round(doneC.length/tasksC.length*100):0;
+    var npsC=avgNPS(leads.filter(function(l){return l.consultantId===c.id;}));
+    var stores=getStores().filter(function(s){return c.stores&&c.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(' · ');
+    h+='<div class="cons-card" style="border-left:4px solid '+c.color+';">';
+    h+='<div style="display:flex;align-items:center;gap:10px;">'+avHtml(c,38);
+    h+='<div style="flex:1;"><div style="font-weight:800;font-size:13px;">'+c.name+'</div><div style="font-size:10px;color:var(--muted);">'+stores+'</div></div>';
+    if(staleC.length>0)h+=pillHtml('🚨 '+staleC.length,'pill-red');
+    else if(c.onLeave)h+=pillHtml('Afastado','pill-orange');
+    else h+=pillHtml('Ativo','pill-green');
+    if(npsC!==null)h+=npsHtml(parseFloat(npsC));
+    h+='</div>';
+    h+='<div class="cons-stats">';
+    h+='<div class="cons-stat"><div class="cons-stat-lbl">Leads</div><div class="cons-stat-val" style="color:var(--teal);">'+activeC.length+'</div></div>';
+    h+='<div class="cons-stat"><div class="cons-stat-lbl">Vendas</div><div class="cons-stat-val" style="color:var(--green);">'+closedC.length+'</div></div>';
+    h+='<div class="cons-stat"><div class="cons-stat-val" style="color:'+(ovdC.length>0?'var(--red)':'var(--muted)')+';">'+ovdC.length+'</div><div class="cons-stat-lbl">Atr.</div></div>';
+    h+='</div>';
+    h+='<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:3px;"><span>Tarefas</span><span>'+doneC.length+'/'+tasksC.length+'</span></div>';
+    h+='<div class="prog-track"><div class="prog-fill" style="width:'+taskPct+'%;background:'+colorPct(taskPct)+';"></div></div></div>';
+    h+='</div>';
+  });
+  h+='</div>';
+  document.getElementById('page-content').innerHTML=h;
+}
+
+// ── KANBAN ────────────────────────────────────────────────────────────────────
+
+function renderKanban(){
+  var users=getUsers();
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">🎯 Funil Kanban</div></div>';
+  h+='<button class="btn btn-primary" id="kb-add-btn">+ Novo Lead</button></div>';
+  h+='<div class="filter-bar">';
+  h+='<select class="fsel" id="kb-cons"><option value="">Todos os Consultores</option>';
+  users.filter(function(u){return u.role!=='admin';}).forEach(function(u){
+    h+='<option value="'+u.id+'">'+u.name+'</option>';
+  });
+  h+='</select>';
+  h+='<input type="text" class="fsearch" id="kb-s" placeholder="🔍 Buscar lead..."/>';
+  h+='<button class="btn btn-ghost btn-sm" id="kb-cem-btn" style="margin-left:auto;">💀 Cemitério</button></div>';
+  h+='<div id="kb-wrap"></div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var addBtn=document.getElementById('kb-add-btn');
+    var cemBtn=document.getElementById('kb-cem-btn');
+    var consF=document.getElementById('kb-cons');
+    var searchF=document.getElementById('kb-s');
+    if(addBtn)addBtn.addEventListener('click',function(){openLeadForm(null);});
+    if(cemBtn)cemBtn.addEventListener('click',showCemetery);
+    if(consF)consF.addEventListener('change',renderKanbanBoard);
+    if(searchF)searchF.addEventListener('input',renderKanbanBoard);
+    renderKanbanBoard();
+  }
+}
+
+function renderKanbanBoard(){
+  var all=visLeads();
+  var consEl=document.getElementById('kb-cons');
+  var searchEl=document.getElementById('kb-s');
+  var consF=consEl?consEl.value:'';
+  var search=searchEl?searchEl.value.toLowerCase():'';
+  var leads=all.filter(function(l){return !l.lost;});
+  if(consF)leads=leads.filter(function(l){return l.consultantId===consF;});
+  if(search)leads=leads.filter(function(l){return (l.name||'').toLowerCase().indexOf(search)>=0||(l.destination||'').toLowerCase().indexOf(search)>=0;});
+  var wrap=document.getElementById('kb-wrap');
+  if(!wrap)return;
+  var h='<div class="kb-board">';
+  STAGES.filter(function(st){return st.id!=='perdido';}).forEach(function(st){
+    var cards=leads.filter(function(l){return l.stage===st.id;});
+    h+='<div class="kb-col">';
+    h+='<div class="kb-col-hd" style="background:'+st.col+';">';
+    h+='<span class="kb-col-title">'+st.icon+' '+st.label+'</span>';
+    h+='<span class="kb-col-cnt">'+cards.length+'</span></div>';
+    h+='<div class="kb-col-body" data-stage="'+st.id+'" id="col-'+st.id+'">';
+    cards.forEach(function(l){h+=renderCard(l);});
+    if(st.id!=='fechado'&&st.id!=='posvenda'){
+      h+='<button class="add-lead-btn" data-stage="'+st.id+'">+ Adicionar</button>';
+    }
+    h+='</div></div>';
+  });
+  h+='</div>';
+  wrap.innerHTML=h;
+  // Bind events after render
+  wrap.querySelectorAll('.kb-col-body').forEach(function(col){
+    col.addEventListener('dragover',function(e){e.preventDefault();col.classList.add('drag-over');});
+    col.addEventListener('dragleave',function(){col.classList.remove('drag-over');});
+    col.addEventListener('drop',function(e){e.preventDefault();col.classList.remove('drag-over');handleDrop(col.getAttribute('data-stage'));});
+  });
+  wrap.querySelectorAll('.kb-card').forEach(function(card){
+    card.addEventListener('dragstart',function(e){S.dragId=card.getAttribute('data-id');e.dataTransfer.effectAllowed='move';card.classList.add('dragging');});
+    card.addEventListener('dragend',function(){card.classList.remove('dragging');});
+  });
+  wrap.querySelectorAll('.lead-edit-btn2').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-id')));});});
+  wrap.querySelectorAll('.lead-advance-btn').forEach(function(btn){btn.addEventListener('click',function(){advanceLead(btn.getAttribute('data-id'));});});
+  wrap.querySelectorAll('.lead-pv-btn').forEach(function(btn){btn.addEventListener('click',function(){moveToPosvenda(btn.getAttribute('data-id'));});});
+  wrap.querySelectorAll('.lead-nps-btn').forEach(function(btn){btn.addEventListener('click',function(){openNPSModal(btn.getAttribute('data-id'));});});
+  wrap.querySelectorAll('.lead-lost-btn').forEach(function(btn){btn.addEventListener('click',function(){markLostModal(btn.getAttribute('data-id'));});});
+  wrap.querySelectorAll('.add-lead-btn').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(null,btn.getAttribute('data-stage'));});});
+}
+
+function renderCard(l){
+  var u=getUserById(l.consultantId);
+  var days=l.entryDate?daysSince(l.entryDate):0;
+  var dup=checkDup(l.whatsapp||'',l.id);
+  var stale=isStaleNew(l);
+  var isFuLate=l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado'&&l.stage!=='posvenda';
+  var isFuToday=l.nextFollowup===today()&&l.stage!=='fechado'&&l.stage!=='posvenda';
+  var cls='kb-card';
+  if(dup)cls+=' dup-warn';
+  if(stale)cls+=' stale-new';
+  if(l.stage==='posvenda')cls+=' pv-card';
+  var h='<div class="'+cls+'" id="card-'+l.id+'" draggable="true" data-id="'+l.id+'">';
+  if(dup)h+='<span class="dup-badge">⚠️ DUP</span>';
+  if(l.nps!==null&&l.nps!==undefined)h+='<div style="position:absolute;top:8px;right:8px;">'+npsHtml(l.nps)+'</div>';
+  h+='<div class="card-name">'+l.name+'</div>';
+  h+='<div class="card-dest">'+(l.destination||'—')+'</div>';
+  if(l.gmv||l.budget)h+='<div class="card-gmv">'+fmtM(l.gmv||l.budget||0)+' · '+(l.paxCount||1)+' pax</div>';
+  if(l.stage==='posvenda'&&l.embarqueDate)h+='<div style="font-size:10px;color:var(--sky);font-weight:600;">✈️ '+fmtDateS(l.embarqueDate)+'→'+fmtDateS(l.returnDate||'?')+'</div>';
+  if(stale)h+='<div class="stale-badge">⏱️ '+hoursInStage(l).toFixed(1)+'h sem contato!</div>';
+  if(isFuLate)h+='<div class="card-fu fu-late">🔴 Atrasado '+daysSince(l.nextFollowup)+'d</div>';
+  else if(isFuToday)h+='<div class="card-fu fu-today">🟡 Retorno hoje</div>';
+  else if(l.nextFollowup)h+='<div class="card-fu fu-ok">📅 '+fmtDate(l.nextFollowup)+'</div>';
+  var noIns=(l.stage==='proposta'||l.stage==='negociacao')&&(l.products||[]).indexOf('Seguro Viagem')<0;
+  if(noIns)h+='<div class="no-ins">🛡️ Sem seguro viagem</div>';
+  h+='<div class="card-meta"><span class="card-days">'+days+'d no funil</span>';
+  if(u)h+='<div class="card-av" style="background:'+u.color+';">'+u.avatar+'</div>';
+  h+='</div>';
+  h+='<div class="card-actions">';
+  h+='<button class="cbtn cbtn-teal lead-edit-btn2" data-id="'+l.id+'">✏️ Editar</button>';
+  if(l.stage!=='fechado'&&l.stage!=='posvenda')h+='<button class="cbtn cbtn-orange lead-advance-btn" data-id="'+l.id+'">→</button>';
+  if(l.stage==='fechado')h+='<button class="cbtn cbtn-sky lead-pv-btn" data-id="'+l.id+'">✈️ Embarque</button>';
+  if(l.stage==='posvenda'&&!l.nps)h+='<button class="cbtn cbtn-sky lead-nps-btn" data-id="'+l.id+'">⭐ NPS</button>';
+  if(l.stage!=='perdido'&&l.stage!=='fechado'&&l.stage!=='posvenda')h+='<button class="cbtn cbtn-red lead-lost-btn" data-id="'+l.id+'">✕</button>';
+  h+='</div></div>';
+  return h;
+}
+
+function handleDrop(st){
+  if(!S.dragId)return;
+  if(st==='perdido'){markLostModal(S.dragId);S.dragId=null;return;}
+  if(st==='posvenda'){moveToPosvenda(S.dragId);S.dragId=null;return;}
+  var leads=getLeads();
+  var idx=leads.findIndex(function(l){return l.id===S.dragId;});
+  if(idx<0)return;
+  leads[idx].stage=st;
+  if(st==='fechado'&&!leads[idx].closed){leads[idx].closed=true;leads[idx].closedDate=today();if(!leads[idx].gmv&&leads[idx].budget)leads[idx].gmv=leads[idx].budget;leads[idx].commission=Math.round((leads[idx].gmv||0)*0.09*0.08);showToast('🏆 Venda fechada!','success');}
+  saveLeads(leads);S.dragId=null;renderKanbanBoard();
+}
+
+function advanceLead(id){
+  var leads=getLeads();var idx=leads.findIndex(function(l){return l.id===id;});if(idx<0)return;
+  var stgs=STAGES.map(function(s){return s.id;}).filter(function(s){return s!=='perdido'&&s!=='posvenda';});
+  var ci=stgs.indexOf(leads[idx].stage);if(ci<0||ci>=stgs.length-1)return;
+  leads[idx].stage=stgs[ci+1];
+  if(leads[idx].stage==='fechado'){leads[idx].closed=true;leads[idx].closedDate=today();leads[idx].commission=Math.round((leads[idx].gmv||0)*0.09*0.08);showToast('🏆 Venda fechada!','success');}
+  saveLeads(leads);renderKanbanBoard();
+}
+
+function moveToPosvenda(id){
+  var h='';
+  h+='<div class="alert sky"><div class="alert-ico">✈️</div><div>Registre as datas de embarque e retorno para acompanhamento.</div></div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Embarque <span class="req">*</span></label><input type="date" id="pv-emb" class="finput" value="'+today()+'"/></div>';
+  h+='<div class="fg"><label class="flbl">Retorno <span class="req">*</span></label><input type="date" id="pv-ret" class="finput"/></div>';
+  h+='</div>';
+  h+='<div class="fg"><label class="flbl">Obs</label><textarea id="pv-notes" class="ftextarea" placeholder="Voo confirmado..."></textarea></div>';
+  openModal('✈️ Confirmar Embarque',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var confirmBtn=document.createElement('button');confirmBtn.className='btn btn-sky';confirmBtn.textContent='✈️ Confirmar';
+    confirmBtn.addEventListener('click',function(){savePV(id);});
+    footer.appendChild(cancelBtn);footer.appendChild(confirmBtn);
+  }
+}
+
+function savePV(id){
+  var embEl=document.getElementById('pv-emb');var retEl=document.getElementById('pv-ret');
+  var emb=embEl?embEl.value:'';var ret=retEl?retEl.value:'';
+  if(!emb||!ret){showToast('Informe embarque e retorno','error');return;}
+  var leads=getLeads();var idx=leads.findIndex(function(l){return l.id===id;});if(idx<0)return;
+  leads[idx].stage='posvenda';leads[idx].embarqueDate=emb;leads[idx].returnDate=ret;
+  var notesEl=document.getElementById('pv-notes');if(notesEl&&notesEl.value)leads[idx].notes=(leads[idx].notes||'')+'\n[PÓS-VENDA] '+notesEl.value;
+  if(!leads[idx].pvTaskCreated){
+    var retDt=new Date(ret+'T00:00:00');
+    var taskDt=new Date(retDt.getTime()+3*86400000).toISOString().split('T')[0];
+    var tasks=getTasks();
+    tasks.push({id:genId(),consultantId:leads[idx].consultantId,date:taskDt,type:'posvenda',title:'Ligar para '+leads[idx].name+' — Como foi a viagem?',meta:'Retornou de '+(leads[idx].destination||'viagem'),completed:false,leadId:id});
+    saveTasks(tasks);leads[idx].pvTaskCreated=true;
+  }
+  saveLeads(leads);closeModal();showToast('Cliente em viagem! Tarefa agendada.','success');
+  if(S.view==='kanban')renderKanbanBoard();else navigate(S.view);
+}
+
+function markLostModal(id){
+  S.lossReason='';
+  var h='';
+  h+='<div class="alert danger"><div class="alert-ico">⚠️</div><div>Lead ficará visível por 15 dias para tentativa de recuperação.</div></div>';
+  h+='<div class="sec-lbl">Motivo da perda <span style="color:var(--red);">*</span></div>';
+  h+='<div class="reason-grid">';
+  LOSS_REASONS.forEach(function(r){h+='<button class="reason-btn" data-reason="'+encodeURIComponent(r)+'">'+r+'</button>';});
+  h+='</div>';
+  h+='<div class="fg" style="margin-top:12px;"><label class="flbl">Detalhe (opcional)</label><textarea id="loss-det" class="ftextarea"></textarea></div>';
+  h+='<div id="reason-err" style="color:var(--red);font-size:12px;font-weight:600;margin-top:6px;display:none;">Selecione um motivo.</div>';
+  openModal('❌ Marcar como Perdido',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var confirmBtn=document.createElement('button');confirmBtn.className='btn btn-danger';confirmBtn.textContent='Confirmar';
+    confirmBtn.addEventListener('click',function(){confirmLost(id);});
+    footer.appendChild(cancelBtn);footer.appendChild(confirmBtn);
+  }
+  document.querySelectorAll('.reason-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      S.lossReason=decodeURIComponent(btn.getAttribute('data-reason'));
+      document.querySelectorAll('.reason-btn').forEach(function(b){b.classList.remove('selected');});
+      btn.classList.add('selected');
+      var e=document.getElementById('reason-err');if(e)e.style.display='none';
+    });
+  });
+}
+
+function confirmLost(id){
+  if(!S.lossReason){var e=document.getElementById('reason-err');if(e)e.style.display='block';return;}
+  var det=document.getElementById('loss-det');var detVal=det?det.value.trim():'';
+  var leads=getLeads();var idx=leads.findIndex(function(l){return l.id===id;});if(idx<0)return;
+  leads[idx].lost=true;leads[idx].lostDate=today();leads[idx].stage='perdido';
+  leads[idx].lostReason=S.lossReason+(detVal?' — '+detVal:'');
+  saveLeads(leads);closeModal();showToast('Lead marcado como perdido.','warn');
+  if(S.view==='kanban')renderKanbanBoard();
+}
+
+function openNPSModal(leadId){
+  S.npsVal=null;
+  var l=leadById(leadId);
+  var h='';
+  h+='<div class="alert sky"><div class="alert-ico">✈️</div><div>Cliente retornou de <strong>'+(l&&l.destination||'viagem')+'</strong>. Registre a avaliação.</div></div>';
+  h+='<div class="sec-lbl">De 0 a 10, quanto indicaria a CVM? <span style="color:var(--red);">*</span></div>';
+  h+='<div class="nps-sel">';
+  [0,1,2,3,4,5,6,7,8,9,10].forEach(function(n){
+    var nc=n<=6?'sel-low':n<=8?'sel-mid':'sel-high';
+    h+='<button class="nps-btn" data-nps="'+n+'" data-cls="'+nc+'">'+n+'</button>';
+  });
+  h+='</div>';
+  h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px;"><span>😞 Não indicaria</span><span>😍 Promotor!</span></div>';
+  h+='<div id="nps-interp" style="font-size:12px;color:var(--muted);margin-top:8px;min-height:18px;"></div>';
+  h+='<div class="fg" style="margin-top:10px;"><label class="flbl">Comentário</label><textarea id="nps-fb" class="ftextarea" placeholder="Feedback do cliente..."></textarea></div>';
+  h+='<div id="nps-err" style="color:var(--red);font-size:12px;font-weight:600;margin-top:6px;display:none;">Selecione uma nota.</div>';
+  openModal('⭐ Coletar NPS',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var skipBtn=document.createElement('button');skipBtn.className='btn btn-ghost';skipBtn.textContent='Agora não';skipBtn.addEventListener('click',closeModal);
+    var saveBtn=document.createElement('button');saveBtn.className='btn btn-sky';saveBtn.textContent='💾 Salvar';
+    saveBtn.addEventListener('click',function(){saveNPS(leadId);});
+    footer.appendChild(skipBtn);footer.appendChild(saveBtn);
+  }
+  document.querySelectorAll('.nps-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      S.npsVal=parseInt(btn.getAttribute('data-nps'));
+      var cls=btn.getAttribute('data-cls');
+      document.querySelectorAll('.nps-btn').forEach(function(b){b.classList.remove('sel-low','sel-mid','sel-high');});
+      btn.classList.add(cls);
+      var i=document.getElementById('nps-interp');
+      if(i)i.textContent=S.npsVal>=9?'⭐ Promotor — peça indicações!':S.npsVal>=7?'😊 Neutro — boa experiência':'😟 Detrator — resolva antes de revender';
+      var e=document.getElementById('nps-err');if(e)e.style.display='none';
+    });
+  });
+}
+
+function saveNPS(leadId){
+  if(S.npsVal===null){var e=document.getElementById('nps-err');if(e)e.style.display='block';return;}
+  var fbEl=document.getElementById('nps-fb');var fb=fbEl?fbEl.value.trim():'';
+  var leads=getLeads();var idx=leads.findIndex(function(l){return l.id===leadId;});if(idx<0)return;
+  leads[idx].nps=S.npsVal;leads[idx].npsDate=today();
+  if(fb)leads[idx].notes=(leads[idx].notes||'')+'\n[NPS '+S.npsVal+'] '+fb;
+  saveLeads(leads);closeModal();
+  showToast(S.npsVal>=9?'🌟 NPS registrado! Cliente promotor!':S.npsVal>=7?'✅ NPS registrado.':'⚠️ NPS baixo registrado.',S.npsVal>=7?'success':'warn');
+  if(S.view==='kanban')renderKanbanBoard();else if(S.view==='posvenda')renderPostSale();
+}
+
+function showCemetery(){
+  var leads=visLeads(true).filter(function(l){return l.lost&&daysSince(l.lostDate||'')>=15;});
+  var h='<div class="cemetery-hd"><div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;">Leads Perdidos há +15 dias</div><div style="font-size:12px;color:rgba(255,255,255,.5);">Arquivados para reativação em campanhas.</div></div>';
+  if(!leads.length){h+='<div class="empty-state"><div class="empty-icon">💀</div><div class="empty-text">Cemitério vazio</div></div>';}
+  else{
+    h+='<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Destino</th><th>Perdido em</th><th>Motivo</th><th></th></tr></thead><tbody>';
+    leads.forEach(function(l){
+      h+='<tr><td><strong>'+l.name+'</strong></td><td>'+l.destination+'</td><td>'+fmtDate(l.lostDate)+'</td><td style="font-size:11px;max-width:140px;">'+(l.lostReason||'—')+'</td><td><button class="btn btn-ghost btn-sm react-lead-btn" data-id="'+l.id+'">♻️ Reativar</button></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  openModal('💀 Cemitério de Leads',h,'');
+  document.querySelectorAll('.react-lead-btn').forEach(function(btn){btn.addEventListener('click',function(){reactivateLead(btn.getAttribute('data-id'));});});
+}
+
+function reactivateLead(id){
+  var leads=getLeads();var idx=leads.findIndex(function(l){return l.id===id;});if(idx<0)return;
+  leads[idx].lost=false;leads[idx].lostDate=null;leads[idx].stage='novo';leads[idx].entryDate=today();leads[idx].entryDateTime=nowISO();leads[idx].nextFollowup=today();
+  saveLeads(leads);closeModal();showToast('Lead reativado!','success');navigate('kanban');
+}
+
+// ── PÓS-VENDA ────────────────────────────────────────────────────────────────
+
+function renderPostSale(){
+  var leads=visLeads().filter(function(l){return l.stage==='posvenda';});
+  var npsAvg=avgNPS(leads);
+  var inTrip=leads.filter(function(l){return l.returnDate&&l.returnDate>=today();}).length;
+  var returned=leads.filter(function(l){return l.returnDate&&l.returnDate<today();}).length;
+  var noNPS=leads.filter(function(l){return l.returnDate&&l.returnDate<today()&&l.nps===null;}).length;
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">✈️ Pós-Venda</div><div class="page-sub">'+leads.length+' cliente(s)</div></div></div>';
+  h+='<div class="grid-4">';
+  h+=kpi(' sky','✈️','Em Viagem',inTrip,'','');
+  h+=kpi(' green','🏠','Retornaram',returned,'','');
+  h+=kpi(npsAvg!==null?(parseFloat(npsAvg)>=8?' green':' orange'):'','⭐','NPS Médio',npsAvg||'—','','');
+  h+=kpi(' orange','📊','Sem NPS',noNPS,'','');
+  h+='</div>';
+  if(!leads.length){h+='<div class="empty-state"><div class="empty-icon">✈️</div><div class="empty-text">Nenhum cliente em viagem</div></div>';}
+  else{
+    h+='<div class="card"><div class="card-title">✈️ Clientes em Viagem</div><div class="table-wrap"><table>';
+    h+='<thead><tr><th>Cliente</th><th>Destino</th><th>Embarque</th><th>Retorno</th><th>Status</th><th>NPS</th><th>Consultor</th><th>Ações</th></tr></thead><tbody>';
+    leads.forEach(function(l){
+      var u=getUserById(l.consultantId);
+      var ret=l.returnDate&&l.returnDate<today();
+      var retDays=ret?daysSince(l.returnDate):null;
+      var urgent=ret&&l.nps===null&&retDays>=3;
+      h+='<tr style="'+(urgent?'background:#FEF3C7;':'')+'">';
+      h+='<td><strong>'+l.name+'</strong>'+(urgent?' '+pillHtml('Urgente!','pill-orange'):'')+'</td>';
+      h+='<td>'+(l.destination||'—')+'</td>';
+      h+='<td>'+fmtDate(l.embarqueDate)+'</td>';
+      h+='<td>'+fmtDate(l.returnDate)+'</td>';
+      h+='<td>'+(ret?pillHtml('Retornou há '+retDays+'d','pill-green'):pillHtml('Em viagem','pill-sky'))+'</td>';
+      if(l.nps!==null){h+='<td>'+npsHtml(l.nps)+'</td>';}
+      else{h+='<td><button class="btn btn-ghost btn-sm pv-nps-btn" data-id="'+l.id+'">⭐ Coletar</button></td>';}
+      h+='<td>'+(u?'<span style="color:'+u.color+';font-weight:700;">'+u.name+'</span>':'—')+'</td>';
+      h+='<td><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm pv-edit-btn" data-id="'+l.id+'">✏️</button>';
+      var waNum=cleanWA(l.whatsapp||'');
+      h+='<a class="btn btn-ghost btn-sm" href="https://wa.me/55'+waNum+'" target="_blank">💬</a></div></td>';
+      h+='</tr>';
+    });
+    h+='</tbody></table></div></div>';
+  }
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    pc.querySelectorAll('.pv-nps-btn').forEach(function(btn){btn.addEventListener('click',function(){openNPSModal(btn.getAttribute('data-id'));});});
+    pc.querySelectorAll('.pv-edit-btn').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-id')));});});
+  }
+}
+
+// ── LEAD FORM ────────────────────────────────────────────────────────────────
+
+function leadById(id){return getLeads().find(function(l){return l.id===id;});}
+
+function openLeadForm(lead,stagePreset){
+  var users=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  var u=S.user;
+  var defCons=u.role==='consultant'?u.id:(lead&&lead.consultantId||'');
+  var defStore=S.store||(u.role==='consultant'&&u.stores[0])||(lead&&lead.storeId||'');
+  var isNew=!lead;
+  var h='';
+  h+='<div class="sec-lbl">Dados do Cliente</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Nome Completo <span style="color:var(--red);">*</span></label><input type="text" id="lf-n" class="finput" value="'+(lead&&lead.name||'')+'"/><span class="ferr" id="lf-n-e"></span></div>';
+  h+='<div class="fg"><label class="flbl">WhatsApp <span style="color:var(--red);">*</span></label><input type="text" id="lf-w" class="finput" value="'+(lead&&lead.whatsapp||'')+'" placeholder="(31) 99999-9999"/><span id="lf-w-m"></span></div>';
+  h+='</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">E-mail</label><input type="email" id="lf-e" class="finput" value="'+(lead&&lead.email||'')+'"/></div>';
+  h+='<div class="fg"><label class="flbl">Origem</label><select id="lf-src" class="fselect">';
+  SOURCES.forEach(function(s){h+='<option value="'+s+'"'+(lead&&lead.source===s?' selected':'')+'>'+s+'</option>';});
+  h+='</select></div></div>';
+  h+='<div class="sec-divider"></div><div class="sec-lbl">Viagem</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Destino <span style="color:var(--red);">*</span></label><select id="lf-d" class="fselect"><option value="">Selecione...</option>';
+  DEST.forEach(function(d){h+='<option value="'+d+'"'+(lead&&lead.destination===d?' selected':'')+'>'+d+'</option>';});
+  h+='</select><span class="ferr" id="lf-d-e"></span></div>';
+  h+='<div class="fg"><label class="flbl">Data Prevista da Viagem</label><input type="date" id="lf-t" class="finput" value="'+(lead&&lead.travelDate||'')+'" /></div>';
+  h+='</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">📅 Data da Venda (Fechamento)</label><input type="date" id="lf-sd" class="finput" value="'+(lead&&lead.saleDate||lead&&lead.closedDate||'')+'"/><div style="font-size:10px;color:var(--muted);margin-top:2px;">Quando a venda foi confirmada/paga</div></div>';
+  h+='<div class="fg"><label class="flbl">Data de Entrada do Lead</label><input type="date" id="lf-ed" class="finput" value="'+(lead&&lead.entryDate||today())+'"/><div style="font-size:10px;color:var(--muted);margin-top:2px;">Quando o cliente entrou no funil</div></div>';
+  h+='</div>';
+  h+='<div class="frow frow-3">';
+  h+='<div class="fg"><label class="flbl">Passageiros</label><input type="number" id="lf-px" class="finput" value="'+(lead&&lead.paxCount||2)+'" min="1"/></div>';
+  h+='<div class="fg"><label class="flbl">Orçamento (R$)</label><input type="number" id="lf-b" class="finput" value="'+(lead&&lead.budget||'')+'" placeholder="15000"/></div>';
+  h+='<div class="fg"><label class="flbl">GMV Real (R$)</label><input type="number" id="lf-g" class="finput" value="'+(lead&&lead.gmv||'')+'" placeholder="0"/></div>';
+  h+='</div>';
+  h+='<div class="sec-lbl">Produtos / Upsell</div>';
+  h+='<div class="check-group">';
+  PRODUCTS.forEach(function(p){h+='<label class="check-item"><input type="checkbox" class="lf-prod" value="'+p+'"'+((lead&&lead.products&&lead.products.indexOf(p)>=0)?' checked':'')+'>'+p+'</label>';});
+  h+='</div>';
+  h+='<div class="sec-divider"></div><div class="sec-lbl">Funil</div>';
+  h+='<div class="frow frow-3">';
+  h+='<div class="fg"><label class="flbl">Loja</label><select id="lf-st" class="fselect"'+(u.role==='consultant'?' disabled':'')+'>'; 
+  getStores().forEach(function(s){h+='<option value="'+s.id+'"'+((lead&&lead.storeId||defStore)===s.id?' selected':'')+'>'+s.short+' — '+s.name+'</option>';});
+  h+='</select></div>';
+  h+='<div class="fg"><label class="flbl">Consultor</label><select id="lf-c" class="fselect"'+(u.role==='consultant'?' disabled':'')+'>'; 
+  users.forEach(function(uu){h+='<option value="'+uu.id+'"'+((lead&&lead.consultantId||defCons)===uu.id?' selected':'')+'>'+uu.name+'</option>';});
+  h+='</select></div>';
+  h+='<div class="fg"><label class="flbl">Etapa</label><select id="lf-sg" class="fselect">';
+  STAGES.forEach(function(s){h+='<option value="'+s.id+'"'+((lead&&lead.stage||stagePreset||'novo')===s.id?' selected':'')+'>'+s.icon+' '+s.label+'</option>';});
+  h+='</select></div></div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Próximo Follow-up</label><input type="date" id="lf-fu" class="finput" value="'+(lead&&lead.nextFollowup||'')+'"/></div>';
+  h+='<div class="fg"><label class="flbl">Notas</label><textarea id="lf-nt" class="ftextarea">'+(lead&&lead.notes||'')+'</textarea></div>';
+  h+='</div>';
+  if(lead&&(lead.stage==='posvenda'||lead.stage==='fechado')){
+    h+='<div class="sec-divider"></div><div class="sec-lbl">Pós-Venda</div>';
+    h+='<div class="frow frow-2">';
+    h+='<div class="fg"><label class="flbl">Embarque</label><input type="date" id="lf-emb" class="finput" value="'+(lead.embarqueDate||'')+'"/></div>';
+    h+='<div class="fg"><label class="flbl">Retorno</label><input type="date" id="lf-ret" class="finput" value="'+(lead.returnDate||'')+'"/></div>';
+    h+='</div>';
+  }
+  openModal(isNew?'✨ Novo Lead':'✏️ Editar Lead',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var saveBtn=document.createElement('button');saveBtn.className='btn btn-primary';saveBtn.textContent='💾 Salvar';
+    saveBtn.addEventListener('click',function(){saveLead(lead&&lead.id||'');});
+    footer.appendChild(cancelBtn);footer.appendChild(saveBtn);
+  }
+  var waEl=document.getElementById('lf-w');
+  if(waEl)waEl.addEventListener('input',checkWAField);
+}
+
+function checkWAField(){
+  var wa=document.getElementById('lf-w')&&document.getElementById('lf-w').value||'';
+  var m=document.getElementById('lf-w-m');if(!m)return;
+  if(!wa){m.className='';m.textContent='';return;}
+  if(!validWA(wa)){m.className='ferr';m.textContent='Número inválido';return;}
+  var dup=checkDup(wa,'');
+  if(dup){m.className='fwarn';m.textContent='⚠️ Já existe: '+dup.name;}
+  else{m.className='fok';m.textContent='✓ Válido';}
+}
+
+function saveLead(existId){
+  var name=(document.getElementById('lf-n')&&document.getElementById('lf-n').value||'').trim();
+  var wa=(document.getElementById('lf-w')&&document.getElementById('lf-w').value||'').trim();
+  var email=(document.getElementById('lf-e')&&document.getElementById('lf-e').value||'').trim();
+  var dest=(document.getElementById('lf-d')&&document.getElementById('lf-d').value||'');
+  var travel=(document.getElementById('lf-t')&&document.getElementById('lf-t').value||'');
+  var saleDate=(document.getElementById('lf-sd')&&document.getElementById('lf-sd').value||'');
+  var entryDateOverride=(document.getElementById('lf-ed')&&document.getElementById('lf-ed').value||'');
+  var pax=parseInt((document.getElementById('lf-px')&&document.getElementById('lf-px').value)||2)||1;
+  var budget=parseFloat((document.getElementById('lf-b')&&document.getElementById('lf-b').value)||0)||0;
+  var gmv=parseFloat((document.getElementById('lf-g')&&document.getElementById('lf-g').value)||0)||0;
+  var storeId=(document.getElementById('lf-st')&&document.getElementById('lf-st').value||'');
+  var consultantId=(document.getElementById('lf-c')&&document.getElementById('lf-c').value||'');
+  var stage=(document.getElementById('lf-sg')&&document.getElementById('lf-sg').value||'novo');
+  var followup=(document.getElementById('lf-fu')&&document.getElementById('lf-fu').value||'');
+  var notes=(document.getElementById('lf-nt')&&document.getElementById('lf-nt').value||'').trim();
+  var source=(document.getElementById('lf-src')&&document.getElementById('lf-src').value||'');
+  var emb=(document.getElementById('lf-emb')&&document.getElementById('lf-emb').value||'');
+  var ret=(document.getElementById('lf-ret')&&document.getElementById('lf-ret').value||'');
+  var products=[].slice.call(document.querySelectorAll('.lf-prod:checked')).map(function(i){return i.value;});
+  var ok=true;
+  var nEl=document.getElementById('lf-n-e');
+  if(name.split(' ').filter(function(w){return w.length>1;}).length<2){if(nEl)nEl.textContent='Nome e sobrenome obrigatórios';ok=false;}else{if(nEl)nEl.textContent='';}
+  if(!validWA(wa)){ok=false;}
+  var dEl=document.getElementById('lf-d-e');
+  if(!dest){if(dEl)dEl.textContent='Selecione um destino';ok=false;}else{if(dEl)dEl.textContent='';}
+  if(!ok)return;
+  var leads=getLeads();
+  if(existId){
+    var idx=leads.findIndex(function(l){return l.id===existId;});
+    if(idx>=0){
+      var old=leads[idx];
+      leads[idx]=Object.assign({},old,{name:name,whatsapp:wa,email:email,destination:dest,travelDate:travel,saleDate:saleDate||old.saleDate||null,entryDate:entryDateOverride||old.entryDate,paxCount:pax,budget:budget,gmv:gmv,storeId:storeId,consultantId:consultantId,stage:stage,nextFollowup:followup||null,notes:notes,source:source,products:products,embarqueDate:emb||old.embarqueDate,returnDate:ret||old.returnDate});
+      if(stage==='fechado'&&!old.closed){leads[idx].closed=true;leads[idx].closedDate=saleDate||today();leads[idx].saleDate=saleDate||today();leads[idx].commission=Math.round(gmv*0.09*0.08);}
+    }
+  } else {
+    leads.push({id:genId(),name:name,whatsapp:wa,email:email,destination:dest,travelDate:travel,saleDate:saleDate||null,paxCount:pax,budget:budget,gmv:gmv,storeId:storeId,consultantId:consultantId,stage:stage,entryDate:entryDateOverride||today(),entryDateTime:nowISO(),lastContact:today(),nextFollowup:followup||null,notes:notes,source:source,products:products,embarqueDate:emb||null,returnDate:ret||null,closed:stage==='fechado',closedDate:stage==='fechado'?(saleDate||today()):null,commission:stage==='fechado'?Math.round(gmv*0.09*0.08):0,lost:false,nps:null,pvTaskCreated:false});
+  }
+  saveLeads(leads);closeModal();
+  showToast(existId?'Lead atualizado!':'Novo lead cadastrado!','success');
+  if(S.view==='kanban')renderKanbanBoard();else if(S.view==='posvenda')renderPostSale();else navigate(S.view);
+}
+
+// ── LEADS TABLE ───────────────────────────────────────────────────────────────
+
+function renderLeads(){
+  var users=getUsers().filter(function(u){return u.role!=='admin';});
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">👥 Todos os Leads</div></div>';
+  h+='<button class="btn btn-primary" id="lds-add-btn">+ Novo Lead</button></div>';
+  h+='<div class="filter-bar">';
+  h+='<input type="text" class="fsearch" id="ld-s" placeholder="🔍 Buscar..." style="width:200px;"/>';
+  h+='<select class="fsel" id="ld-st"><option value="">Todas as Etapas</option>';
+  STAGES.forEach(function(s){h+='<option value="'+s.id+'">'+s.icon+' '+s.label+'</option>';});
+  h+='<option value="cemiterio">💀 Cemitério</option>';
+  h+='</select>';
+  h+='<select class="fsel" id="ld-c"><option value="">Todos</option>';
+  users.forEach(function(u){h+='<option value="'+u.id+'">'+u.name+'</option>';});
+  h+='</select></div>';
+  h+='<div class="card"><div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Destino</th><th>WhatsApp</th><th>Etapa</th><th>GMV</th><th>NPS</th><th>Consultor</th><th>Follow-up</th><th>Ações</th></tr></thead><tbody id="leads-tbody"></tbody></table></div></div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var addBtn=document.getElementById('lds-add-btn');
+    if(addBtn)addBtn.addEventListener('click',function(){openLeadForm(null);});
+    var sEl=document.getElementById('ld-s');var stEl=document.getElementById('ld-st');var cEl=document.getElementById('ld-c');
+    if(sEl)sEl.addEventListener('input',filterLeads);
+    if(stEl)stEl.addEventListener('change',filterLeads);
+    if(cEl)cEl.addEventListener('change',filterLeads);
+    filterLeads();
+  }
+}
+
+function filterLeads(){
+  var sEl=document.getElementById('ld-s');var stEl=document.getElementById('ld-st');var cEl=document.getElementById('ld-c');
+  var s=sEl?sEl.value.toLowerCase():'';
+  var st=stEl?stEl.value:'';
+  var c=cEl?cEl.value:'';
+  var leads=visLeads(true);
+  if(s)leads=leads.filter(function(l){return (l.name||'').toLowerCase().indexOf(s)>=0||(l.destination||'').toLowerCase().indexOf(s)>=0;});
+  if(st==='cemiterio')leads=leads.filter(function(l){return l.lost&&daysSince(l.lostDate||'')>=15;});
+  else if(st)leads=leads.filter(function(l){return l.stage===st;});
+  if(c)leads=leads.filter(function(l){return l.consultantId===c;});
+  var tbody=document.getElementById('leads-tbody');if(!tbody)return;
+  if(!leads.length){tbody.innerHTML='<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum lead</div></div></td></tr>';return;}
+  var h='';
+  leads.forEach(function(l){
+    var u=getUserById(l.consultantId);var st2=getStageById(l.stage);
+    var stale=isStaleNew(l);
+    var isOvd=l.nextFollowup&&l.nextFollowup<today()&&!l.closed&&!l.lost;
+    var waNum=cleanWA(l.whatsapp||'');
+    h+='<tr style="'+(stale?'background:#FEF2F2;':'')+'">';
+    h+='<td><strong>'+l.name+'</strong>'+(stale?' '+pillHtml('⏱️ '+hoursInStage(l).toFixed(0)+'h','pill-red'):'')+'</td>';
+    h+='<td style="font-size:12px;">'+(l.destination||'—')+'</td>';
+    h+='<td><a href="https://wa.me/55'+waNum+'" target="_blank" style="color:var(--teal);text-decoration:none;">'+fmtWA(l.whatsapp||'—')+'</a></td>';
+    h+='<td>';
+    if(st2){h+='<span class="pill" style="background:'+st2.col+'22;color:'+st2.col+';">'+st2.icon+' '+st2.label+'</span>';}
+    else{h+=l.stage;}
+    h+='</td>';
+    h+='<td style="font-family:DM Mono,monospace;">'+fmtM(l.gmv||l.budget||0)+'</td>';
+    h+='<td>'+(l.nps!==null&&l.nps!==undefined?npsHtml(l.nps):'—')+'</td>';
+    h+='<td>'+(u?'<span style="color:'+u.color+';font-weight:700;">'+u.name+'</span>':'—')+'</td>';
+    h+='<td style="color:'+(isOvd?'var(--red)':'inherit')+';">'+fmtDate(l.nextFollowup)+'</td>';
+    h+='<td><div style="display:flex;gap:4px;">';
+    h+='<button class="btn btn-ghost btn-sm ld-edit" data-id="'+l.id+'">✏️</button>';
+    if(!l.lost&&!l.closed)h+='<button class="btn btn-ghost btn-sm ld-lost" data-id="'+l.id+'">❌</button>';
+    if(l.lost)h+='<button class="btn btn-ghost btn-sm ld-react" data-id="'+l.id+'">♻️</button>';
+    h+='</div></td>';
+    h+='</tr>';
+  });
+  tbody.innerHTML=h;
+  tbody.querySelectorAll('.ld-edit').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-id')));});});
+  tbody.querySelectorAll('.ld-lost').forEach(function(btn){btn.addEventListener('click',function(){markLostModal(btn.getAttribute('data-id'));});});
+  tbody.querySelectorAll('.ld-react').forEach(function(btn){btn.addEventListener('click',function(){reactivateLead(btn.getAttribute('data-id'));});});
+}
+
+// ── TASKS ─────────────────────────────────────────────────────────────────────
+
+function renderTasks(){
+  var u=S.user;
+  var allTasks=getTasks();
+  if(u.role==='consultant')allTasks=allTasks.filter(function(t){return t.consultantId===u.id;});
+  var tod=today();
+  var todayTasks=allTasks.filter(function(t){return t.date===tod;});
+  var overdueTasks=allTasks.filter(function(t){return t.date<tod&&!t.completed;});
+  var done=todayTasks.filter(function(t){return t.completed;}).length;
+  var tot=todayTasks.length;
+  var pct=tot>0?Math.round(done/tot*100):0;
+  var fuLeads=visLeads().filter(function(l){return !l.lost&&l.nextFollowup===tod&&l.stage!=='fechado';});
+  var pvDue=visLeads().filter(function(l){return l.stage==='posvenda'&&l.returnDate&&daysSince(l.returnDate)>=3&&l.nps===null;});
+  var typeColors={followup:'pill-blue',call:'pill-teal',reactivation:'pill-orange',admin:'pill-gray',posvenda:'pill-sky'};
+  var typeLabels={followup:'Follow-up',call:'Ligação',reactivation:'Reativação',admin:'Admin',posvenda:'Pós-Venda'};
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">✅ Tarefas do Dia</div><div class="page-sub">'+done+'/'+tot+' concluídas</div></div>';
+  h+='<button class="btn btn-primary btn-sm" id="task-add-btn">+ Nova Tarefa</button></div>';
+  h+='<div class="grid-4">';
+  h+=kpi(' green','✅','Concluídas',done,'de '+tot+' hoje','');
+  h+=kpi(' orange','🔔','Follow-ups',fuLeads.length,'','');
+  h+=kpi(' sky','✈️','Pós-Venda Urgente',pvDue.length,'NPS pendente','');
+  h+=kpi(' red','⚠️','Atrasadas',overdueTasks.length,'','');
+  h+='</div><div class="grid-2">';
+  h+='<div class="card"><div class="card-title">📋 Checklist de hoje</div>';
+  h+='<div class="prog-track" style="margin-bottom:14px;height:10px;"><div class="prog-fill" style="width:'+pct+'%;background:'+colorPct(pct)+';"></div></div>';
+  if(!todayTasks.length&&!overdueTasks.length){h+='<div class="empty-state" style="padding:20px;"><div class="empty-icon">🎉</div><div class="empty-text">Sem tarefas!</div></div>';}
+  todayTasks.forEach(function(t){
+    h+='<div class="task-item'+(t.completed?' done':'')+'">';
+    h+='<div class="task-check '+(t.completed?'checked':'')+' task-toggle" data-id="'+t.id+'">'+(t.completed?'✓':'')+'</div>';
+    h+='<div style="flex:1;"><div class="task-title">'+t.title+'</div>';
+    if(t.meta)h+='<div class="task-meta">'+t.meta+'</div>';
+    h+='<span class="pill '+(typeColors[t.type]||'pill-gray')+'" style="font-size:9px;margin-top:4px;display:inline-block;">'+(typeLabels[t.type]||t.type)+'</span></div>';
+    if(t.leadId)h+='<button class="btn btn-ghost btn-sm task-lead-btn" data-lid="'+t.leadId+'">🔗</button>';
+    h+='</div>';
+  });
+  if(overdueTasks.length){
+    h+='<div style="margin-top:12px;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:8px;">⚠️ Atrasadas</div>';
+    overdueTasks.forEach(function(t){
+      h+='<div class="task-item">';
+      h+='<div class="task-check task-toggle" data-id="'+t.id+'"></div>';
+      h+='<div style="flex:1;"><div class="task-title">'+t.title+'</div><div class="task-meta">'+fmtDate(t.date)+'</div></div></div>';
+    });
+  }
+  h+='</div>';
+  h+='<div>';
+  if(fuLeads.length){
+    h+='<div class="card" style="margin-bottom:14px;"><div class="card-title">🔔 Follow-ups para Hoje ('+fuLeads.length+')</div>';
+    fuLeads.forEach(function(l){
+      var waNum=cleanWA(l.whatsapp||'');
+      h+='<div class="task-item">';
+      h+='<div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">'+(l.destination||'—')+' · '+fmtM(l.budget||0)+'</div></div>';
+      h+='<a class="btn btn-primary btn-sm" href="https://wa.me/55'+waNum+'" target="_blank">💬</a>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  if(pvDue.length){
+    h+='<div class="card" style="margin-bottom:14px;border-top:3px solid var(--sky);">';
+    h+='<div class="card-title" style="color:var(--sky);">✈️ Pós-Venda Urgente</div>';
+    pvDue.forEach(function(l){
+      h+='<div class="task-item">';
+      h+='<div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">Retornou há '+daysSince(l.returnDate)+'d · '+(l.destination||'—')+'</div></div>';
+      h+='<button class="btn btn-sky btn-sm pv-nps-tsk" data-id="'+l.id+'">⭐ NPS</button>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div></div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var taskAddBtn=document.getElementById('task-add-btn');
+    if(taskAddBtn)taskAddBtn.addEventListener('click',addTaskForm);
+    pc.querySelectorAll('.task-toggle').forEach(function(el){el.addEventListener('click',function(){toggleTask(el.getAttribute('data-id'));});});
+    pc.querySelectorAll('.task-lead-btn').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-lid')));});});
+    pc.querySelectorAll('.pv-nps-tsk').forEach(function(btn){btn.addEventListener('click',function(){openNPSModal(btn.getAttribute('data-id'));});});
+  }
+}
+
+function toggleTask(id){var t=getTasks();var i=t.findIndex(function(x){return x.id===id;});if(i<0)return;t[i].completed=!t[i].completed;saveTasks(t);renderTasks();}
+
+function addTaskForm(){
+  var users=getUsers().filter(function(u){return u.role!=='admin'&&u.active;});
+  var u=S.user;
+  var h='';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Título <span style="color:var(--red);">*</span></label><input type="text" id="tf-ti" class="finput" placeholder="Ex: Ligar para cliente X"/></div>';
+  h+='<div class="fg"><label class="flbl">Tipo</label><select id="tf-tp" class="fselect"><option value="followup">Follow-up</option><option value="call">Ligação</option><option value="reactivation">Reativação</option><option value="posvenda">Pós-Venda</option><option value="admin">Admin</option></select></div>';
+  h+='</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Consultor</label><select id="tf-cn" class="fselect"'+(u.role==='consultant'?' disabled':'')+'>'; 
+  users.forEach(function(uu){h+='<option value="'+uu.id+'"'+(uu.id===u.id?' selected':'')+'>'+uu.name+'</option>';});
+  h+='</select></div>';
+  h+='<div class="fg"><label class="flbl">Data</label><input type="date" id="tf-dt" class="finput" value="'+today()+'"/></div>';
+  h+='</div>';
+  h+='<div class="fg"><label class="flbl">Detalhe</label><input type="text" id="tf-mt" class="finput" placeholder="Mais contexto..."/></div>';
+  openModal('➕ Nova Tarefa',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var saveBtn=document.createElement('button');saveBtn.className='btn btn-primary';saveBtn.textContent='Salvar';saveBtn.addEventListener('click',saveTask);
+    footer.appendChild(cancelBtn);footer.appendChild(saveBtn);
+  }
+}
+
+function saveTask(){
+  var tiEl=document.getElementById('tf-ti');var ti=tiEl?tiEl.value.trim():'';
+  if(!ti){showToast('Informe o título','error');return;}
+  var t=getTasks();
+  var cnEl=document.getElementById('tf-cn');var dtEl=document.getElementById('tf-dt');var tpEl=document.getElementById('tf-tp');var mtEl=document.getElementById('tf-mt');
+  t.push({id:genId(),consultantId:cnEl?cnEl.value:S.user.id,date:dtEl?dtEl.value:today(),type:tpEl?tpEl.value:'followup',title:ti,meta:mtEl?mtEl.value.trim():'',completed:false});
+  saveTasks(t);closeModal();showToast('Tarefa adicionada!','success');renderTasks();
+}
+
+// ── GOALS ────────────────────────────────────────────────────────────────────
+
+function renderGoals(){
+  var isAdmin=S.user.role==='admin'||S.user.role==='manager';
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">📈 Metas</div></div>';
+  if(isAdmin)h+='<button class="btn btn-primary btn-sm" id="goal-edit-btn">✏️ Editar Metas</button>';
+  h+='</div>';
+  h+='<div class="tab-bar"><button class="tab-item active" id="tab-s">Por Loja</button><button class="tab-item" id="tab-c">Por Consultor</button></div>';
+  h+='<div id="goals-body">'+buildGoalsStores()+'</div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var editBtn=document.getElementById('goal-edit-btn');var tabS=document.getElementById('tab-s');var tabC=document.getElementById('tab-c');
+    if(editBtn)editBtn.addEventListener('click',openGoalEditor);
+    if(tabS)tabS.addEventListener('click',function(){tabS.classList.add('active');tabC.classList.remove('active');document.getElementById('goals-body').innerHTML=buildGoalsStores();});
+    if(tabC)tabC.addEventListener('click',function(){tabC.classList.add('active');tabS.classList.remove('active');document.getElementById('goals-body').innerHTML=buildGoalsCons();});
+  }
+}
+
+function buildGoalsStores(){
+  var goals=getGoals();var leads=visLeads();var month=new Date().getMonth()+1;
+  var stores=getStores().filter(function(s){return S.user.role==='admin'||S.user.stores.indexOf(s.id)>=0;});
+  var h='<div class="grid-3">';
+  stores.forEach(function(s){
+    var sg=goals.stores[s.id]||{monthly:0,quarterly:0,annual:0};
+    var seasonal=(sg.seasonality&&sg.seasonality[month])||1;
+    var adj=Math.round(sg.monthly*seasonal);
+    var closed=leads.filter(function(l){return l.storeId===s.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var gmv=closed.reduce(function(a,l){return a+(l.gmv||0);},0);
+    var pct=adj>0?Math.round(gmv/adj*100):0;
+    var npsV=avgNPS(leads.filter(function(l){return l.storeId===s.id;}));
+    h+='<div class="card" style="border-top:4px solid '+s.color+';">';
+    h+='<div class="card-title"><span style="color:'+s.color+';">'+s.short+'</span> '+s.name;
+    if(npsV)h+=npsHtml(parseFloat(npsV));
+    h+='</div>';
+    h+='<div class="grid-2" style="margin-bottom:12px;">';
+    h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:10px;"><div style="font-size:10px;color:var(--muted);font-weight:700;">Realizado</div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+fmtM(gmv)+'</div></div>';
+    h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:10px;"><div style="font-size:10px;color:var(--muted);font-weight:700;">Meta Ajustada</div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+fmtM(adj)+'</div></div>';
+    h+='</div>';
+    h+='<div class="prog-track" style="height:10px;"><div class="prog-fill" style="width:'+Math.min(pct,100)+'%;background:'+s.color+';"></div></div>';
+    h+='<div style="text-align:right;font-size:14px;font-weight:800;margin-top:5px;color:'+colorPct(pct)+';">'+pct+'%</div>';
+    h+='<div class="divider"></div>';
+    h+='<div style="display:flex;gap:10px;">';
+    h+='<div style="flex:1;text-align:center;"><div style="font-size:9px;color:var(--muted);font-weight:700;">Trimestral</div><div style="font-size:12px;font-weight:700;">'+fmtM(sg.quarterly||0)+'</div></div>';
+    h+='<div style="flex:1;text-align:center;"><div style="font-size:9px;color:var(--muted);font-weight:700;">Anual</div><div style="font-size:12px;font-weight:700;">'+fmtM(sg.annual||0)+'</div></div>';
+    h+='</div>';
+    h+='<div style="margin-top:8px;font-size:11px;color:var(--muted);">Sazonalidade Abr: <strong>'+Math.round(seasonal*100)+'%</strong></div>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+
+function buildGoalsCons(){
+  var goals=getGoals();var leads=visLeads();var u=S.user;
+  var cons=getUsers().filter(function(c){
+    if(u.role==='consultant')return c.id===u.id;
+    if(u.role==='manager')return u.stores.some(function(s){return c.stores&&c.stores.indexOf(s)>=0;});
+    return c.role==='consultant'||c.role==='manager';
+  }).filter(function(c){return c.role!=='admin'&&c.role!=='posvenda';});
+  var h='<div class="grid-3">';
+  cons.forEach(function(c){
+    var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:0,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30};
+    var cl=leads.filter(function(l){return l.consultantId===c.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(l.saleDate||l.closedDate||'').substring(0,7)===(new Date().toISOString().substring(0,7));});
+    var realGmv=cl.reduce(function(a,l){return a+(l.gmv||0);},0);
+    var pct=cg.gmv>0?Math.round(realGmv/cg.gmv*100):0;
+    var stores=getStores().filter(function(s){return c.stores&&c.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(' · ');
+    var upsells=[
+      {prod:'Seguro Viagem',icon:'🛡️',meta:cg.metaSeguro||60},
+      {prod:'Chip Internacional',icon:'📱',meta:cg.metaChip||50},
+      {prod:'Transfer In/Out',icon:'🚌',meta:cg.metaTransfer||40},
+      {prod:'Passeios Extras',icon:'🎡',meta:cg.metaPasseios||30}
+    ];
+    h+='<div class="card" style="border-left:4px solid '+c.color+';">';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'+avHtml(c,36);
+    h+='<div style="flex:1;"><div style="font-weight:800;font-size:14px;">'+c.name+'</div><div style="font-size:11px;color:var(--muted);">'+stores+'</div></div></div>';
+    h+=progRow('GMV '+new Date().toLocaleDateString('pt-BR',{month:'short',year:'numeric'}),realGmv,cg.gmv,c.color);
+    h+='<div style="margin-top:8px;">';
+    upsells.forEach(function(ups){
+      var cnt=cl.filter(function(l){return (l.products||[]).indexOf(ups.prod)>=0;}).length;
+      var upsPct=cl.length>0?Math.round(cnt/cl.length*100):0;
+      var ok=upsPct>=ups.meta;
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">';
+      h+='<span style="font-size:13px;">'+ups.icon+'</span>';
+      h+='<div style="flex:1;"><div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:2px;">'+ups.prod+'</div>';
+      h+='<div class="prog-track" style="height:5px;"><div class="prog-fill" style="width:'+Math.min(upsPct,100)+'%;background:'+(ok?'var(--green)':'var(--orange)')+';"></div></div></div>';
+      h+='<div style="font-size:11px;font-weight:800;color:'+(ok?'var(--green)':'var(--orange)')+';">'+upsPct+'%<span style="font-weight:400;color:var(--muted);font-size:10px;"> /'+ups.meta+'%</span></div>';
+      h+='</div>';
+    });
+    h+='</div>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+
+function openGoalEditor(){
+  var goals=getGoals();var stores=getStores();
+  var cons=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  var h='<div class="tab-bar" style="margin-bottom:16px;"><button class="tab-item active" id="ge-tab-s">Por Loja</button><button class="tab-item" id="ge-tab-c">Por Consultor</button></div>';
+  h+='<div id="ge-section-s">';
+  stores.forEach(function(s){
+    var sg=goals.stores&&goals.stores[s.id]||{};
+    h+='<div style="margin-bottom:14px;padding:14px;background:var(--bg);border-radius:10px;border-left:3px solid '+s.color+';">';
+    h+='<div style="font-weight:800;font-size:13px;margin-bottom:10px;">'+s.short+' — '+s.name+'</div>';
+    h+='<div class="frow frow-3">';
+    h+='<div class="fg"><label class="flbl">GMV Mensal (R$)</label><input type="number" id="ge-'+s.id+'-m" class="finput" value="'+(sg.monthly||0)+'"/></div>';
+    h+='<div class="fg"><label class="flbl">Trimestral (R$)</label><input type="number" id="ge-'+s.id+'-q" class="finput" value="'+(sg.quarterly||0)+'"/></div>';
+    h+='<div class="fg"><label class="flbl">Anual (R$)</label><input type="number" id="ge-'+s.id+'-a" class="finput" value="'+(sg.annual||0)+'"/></div>';
+    h+='</div></div>';
+  });
+  h+='</div>';
+  h+='<div id="ge-section-c" style="display:none;">';
+  cons.forEach(function(c){
+    var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:0,salesQty:0,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30};
+    h+='<div style="margin-bottom:14px;padding:14px;background:var(--bg);border-radius:10px;border-left:3px solid '+c.color+';">';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+avHtml(c,26)+'<div style="font-weight:800;font-size:13px;">'+c.name+'</div></div>';
+    h+='<div class="frow frow-2" style="margin-bottom:8px;">';
+    h+='<div class="fg"><label class="flbl">Meta GMV Mensal (R$)</label><input type="number" id="gc-'+c.id+'-gmv" class="finput" value="'+(cg.gmv||0)+'"/></div>';
+    h+='<div class="fg"><label class="flbl">Meta Vendas/Mês (qtd)</label><input type="number" id="gc-'+c.id+'-qty" class="finput" value="'+(cg.salesQty||0)+'"/></div>';
+    h+='</div>';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">🛡️ Metas de Upsell (%)</div>';
+    h+='<div class="frow frow-4" style="grid-template-columns:1fr 1fr 1fr 1fr;">';
+    h+='<div class="fg"><label class="flbl">Seguro</label><input type="number" id="gc-'+c.id+'-seg" class="finput" value="'+(cg.metaSeguro||60)+'" min="0" max="100"/></div>';
+    h+='<div class="fg"><label class="flbl">Chip</label><input type="number" id="gc-'+c.id+'-chp" class="finput" value="'+(cg.metaChip||50)+'" min="0" max="100"/></div>';
+    h+='<div class="fg"><label class="flbl">Transfer</label><input type="number" id="gc-'+c.id+'-trf" class="finput" value="'+(cg.metaTransfer||40)+'" min="0" max="100"/></div>';
+    h+='<div class="fg"><label class="flbl">Passeios</label><input type="number" id="gc-'+c.id+'-pas" class="finput" value="'+(cg.metaPasseios||30)+'" min="0" max="100"/></div>';
+    h+='</div>';
+    h+='</div>';
+  });
+  h+='</div>';
+  openModal('✏️ Editar Metas',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var saveBtn=document.createElement('button');saveBtn.className='btn btn-primary';saveBtn.textContent='💾 Salvar Metas';saveBtn.addEventListener('click',saveGoals2);
+    footer.appendChild(cancelBtn);footer.appendChild(saveBtn);
+  }
+  var tabS=document.getElementById('ge-tab-s');var tabC=document.getElementById('ge-tab-c');
+  var secS=document.getElementById('ge-section-s');var secC=document.getElementById('ge-section-c');
+  if(tabS)tabS.addEventListener('click',function(){tabS.classList.add('active');tabC.classList.remove('active');secS.style.display='';secC.style.display='none';});
+  if(tabC)tabC.addEventListener('click',function(){tabC.classList.add('active');tabS.classList.remove('active');secS.style.display='none';secC.style.display='';});
+}
+
+function saveGoals2(){
+  var goals=getGoals();var stores=getStores();if(!goals.stores)goals.stores={};
+  stores.forEach(function(s){
+    if(!goals.stores[s.id])goals.stores[s.id]={seasonality:(DEFAULT_GOALS.stores[s.id]&&DEFAULT_GOALS.stores[s.id].seasonality)||{}};
+    var mEl=document.getElementById('ge-'+s.id+'-m');
+    var qEl=document.getElementById('ge-'+s.id+'-q');
+    var aEl=document.getElementById('ge-'+s.id+'-a');
+    if(mEl)goals.stores[s.id].monthly=parseFloat(mEl.value)||0;
+    if(qEl)goals.stores[s.id].quarterly=parseFloat(qEl.value)||0;
+    if(aEl)goals.stores[s.id].annual=parseFloat(aEl.value)||0;
+  });
+  if(!goals.consultants)goals.consultants={};
+  var cons=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  cons.forEach(function(c){
+    if(!goals.consultants[c.id])goals.consultants[c.id]={};
+    var gmvEl=document.getElementById('gc-'+c.id+'-gmv');
+    var qtyEl=document.getElementById('gc-'+c.id+'-qty');
+    var segEl=document.getElementById('gc-'+c.id+'-seg');
+    var chpEl=document.getElementById('gc-'+c.id+'-chp');
+    var trfEl=document.getElementById('gc-'+c.id+'-trf');
+    var pasEl=document.getElementById('gc-'+c.id+'-pas');
+    if(gmvEl)goals.consultants[c.id].gmv=parseFloat(gmvEl.value)||0;
+    if(qtyEl)goals.consultants[c.id].salesQty=parseInt(qtyEl.value)||0;
+    if(segEl)goals.consultants[c.id].metaSeguro=parseInt(segEl.value)||60;
+    if(chpEl)goals.consultants[c.id].metaChip=parseInt(chpEl.value)||50;
+    if(trfEl)goals.consultants[c.id].metaTransfer=parseInt(trfEl.value)||40;
+    if(pasEl)goals.consultants[c.id].metaPasseios=parseInt(pasEl.value)||30;
+  });
+  saveGoals(goals);closeModal();showToast('Metas salvas!','success');renderGoals();
+}
+
+// ── COMMISSIONS ───────────────────────────────────────────────────────────────
+
+function renderCommissions(){
+  var u=S.user;var leads=visLeads();
+  var cons=u.role==='consultant'?[u]:getUsers().filter(function(c){return c.role==='consultant'||(c.role==='manager'&&u.role==='admin');});
+  var goals=getGoals();var r=35;var circ=2*Math.PI*r;
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">💰 Comissões — Abril 2026</div></div></div>';
+  h+='<div class="grid-3">';
+  cons.filter(function(c){return c.role!=='admin';}).forEach(function(c){
+    var cl=leads.filter(function(l){return l.consultantId===c.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var totalGmv=cl.reduce(function(a,l){return a+(l.gmv||0);},0);
+    var receita=totalGmv*0.09;
+    var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:100000};
+    var metaR=cg.gmv*0.09;
+    var pctR=metaR>0?receita/metaR:0;
+    var commPct=0.05;var level='Base';var levelCls='pill-red';
+    if(pctR>=2){commPct=0.14;level='Meta Dobrada!';levelCls='pill-purple';}
+    else if(pctR>=1.5){commPct=0.12;level='Meta +50%';levelCls='pill-green';}
+    else if(pctR>=1.3){commPct=0.10;level='Meta +30%';levelCls='pill-blue';}
+    else if(pctR>=1){commPct=0.08;level='Meta Batida';levelCls='pill-orange';}
+    var comm=receita*commPct;
+    var ringPct=Math.min(Math.round(pctR*100),100);
+    var offset=circ-circ*ringPct/100;
+    var ins=calcUpsell(cl).find(function(m){return m.product==='Seguro Viagem';})||{pct:0};
+    h+='<div class="card" style="text-align:center;">';
+    h+='<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">'+avHtml(c,36);
+    h+='<div><div style="font-weight:800;font-size:14px;">'+c.name+'</div>'+pillHtml(level,levelCls)+'</div></div>';
+    h+='<div class="ring-wrap"><svg width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="'+r+'" fill="none" stroke="var(--bg)" stroke-width="8"/><circle cx="45" cy="45" r="'+r+'" fill="none" stroke="'+c.color+'" stroke-width="8" stroke-dasharray="'+circ.toFixed(2)+'" stroke-dashoffset="'+offset.toFixed(2)+'" stroke-linecap="round"/></svg><div class="ring-text">'+ringPct+'%</div></div>';
+    h+='<div style="font-family:Syne,sans-serif;font-size:32px;font-weight:800;color:var(--mint);">'+fmtM(comm)+'</div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:4px;">Comissão estimada</div>';
+    h+='<div class="divider"></div>';
+    h+='<div style="font-size:11px;color:var(--muted);">GMV: '+fmtM(totalGmv)+' · Receita: '+fmtM(receita)+'</div>';
+    h+='<div style="font-size:11px;color:var(--muted);">'+cl.length+' vendas · '+Math.round(commPct*100)+'% sobre receita</div>';
+    h+='<div style="font-size:11px;margin-top:4px;color:'+(ins.pct>=60?'var(--green)':'var(--orange)')+';">🛡️ Seguro: '+ins.pct+'% (meta 60%)</div>';
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<div class="card"><div class="card-title">💸 Tabela de Comissões</div>';
+  h+='<div class="table-wrap"><table><thead><tr><th>Nível</th><th>Condição</th><th>% Receita</th></tr></thead><tbody>';
+  var tbl=[['pill-red','Base','Abaixo da meta','5%'],['pill-orange','Meta Batida','100–129%','8%'],['pill-blue','Meta +30%','130–149%','10%'],['pill-green','Meta +50%','150–199%','12%'],['pill-purple','Meta Dobrada!','200%+','14%']];
+  tbl.forEach(function(r2){h+='<tr><td>'+pillHtml(r2[1],r2[0])+'</td><td>'+r2[2]+'</td><td><strong>'+r2[3]+'</strong></td></tr>';});
+  h+='</tbody></table></div></div>';
+  document.getElementById('page-content').innerHTML=h;
+}
+
+// ── ANALYTICS ────────────────────────────────────────────────────────────────
+
+function renderAnalytics(){
+  var leads=visLeads(true);
+  var closed=leads.filter(function(l){return l.stage==='fechado'||l.stage==='posvenda';});
+  var lost=leads.filter(function(l){return l.lost&&l.lostReason;});
+  var destMap={};
+  closed.forEach(function(l){if(!l.destination)return;if(!destMap[l.destination])destMap[l.destination]={cnt:0,gmv:0};destMap[l.destination].cnt++;destMap[l.destination].gmv+=(l.gmv||0);});
+  var destArr=Object.keys(destMap).map(function(k){return {name:k,cnt:destMap[k].cnt,gmv:destMap[k].gmv};}).sort(function(a,b){return b.gmv-a.gmv;});
+  var maxGmv=destArr.length?destArr[0].gmv:1;
+  var lossMap={};
+  lost.forEach(function(l){var r=(l.lostReason||'').split(' — ')[0];lossMap[r]=(lossMap[r]||0)+1;});
+  var lossArr=Object.keys(lossMap).map(function(k){return {r:k,c:lossMap[k]};}).sort(function(a,b){return b.c-a.c;});
+  var npsLeads=leads.filter(function(l){return l.nps!==null&&l.nps!==undefined;});
+  var npsPro=npsLeads.filter(function(l){return l.nps>=9;}).length;
+  var npsNeu=npsLeads.filter(function(l){return l.nps>=7&&l.nps<=8;}).length;
+  var npsDet=npsLeads.filter(function(l){return l.nps<=6;}).length;
+  var npsScore=npsLeads.length?Math.round((npsPro-npsDet)/npsLeads.length*100):null;
+  var upsellM=calcUpsell(closed);
+  // ── TEMPO MÉDIO DE FECHAMENTO ──
+  var closedWithDates=closed.filter(function(l){return l.entryDate&&(l.saleDate||l.closedDate);});
+  var avgDays=0;var minDays=0;var maxDays=0;var fastBuyers=[];var slowBuyers=[];
+  if(closedWithDates.length){
+    var daysArr=closedWithDates.map(function(l){
+      var sale=new Date((l.saleDate||l.closedDate)+'T00:00:00');
+      var entry=new Date(l.entryDate+'T00:00:00');
+      return Math.max(0,Math.floor((sale.getTime()-entry.getTime())/86400000));
+    });
+    avgDays=Math.round(daysArr.reduce(function(a,b){return a+b;},0)/daysArr.length);
+    minDays=Math.min.apply(null,daysArr);
+    maxDays=Math.max.apply(null,daysArr);
+    fastBuyers=closedWithDates.filter(function(l){var d=Math.floor((new Date((l.saleDate||l.closedDate)+'T00:00:00')-new Date(l.entryDate+'T00:00:00'))/86400000);return d<=avgDays;});
+    slowBuyers=closedWithDates.filter(function(l){var d=Math.floor((new Date((l.saleDate||l.closedDate)+'T00:00:00')-new Date(l.entryDate+'T00:00:00'))/86400000);return d>avgDays;});
+  }
+  // Perfil ideal: fonte + destino + produto mais comum entre rápidos
+  var fastSrcMap={};var fastDestMap={};
+  fastBuyers.forEach(function(l){
+    if(l.source)fastSrcMap[l.source]=(fastSrcMap[l.source]||0)+1;
+    if(l.destination){var d=l.destination.split('(')[0].trim();fastDestMap[d]=(fastDestMap[d]||0)+1;}
+  });
+  var topSrc=Object.keys(fastSrcMap).sort(function(a,b){return fastSrcMap[b]-fastSrcMap[a];})[0];
+  var topDest=Object.keys(fastDestMap).sort(function(a,b){return fastDestMap[b]-fastDestMap[a];})[0];
+  var conv=leads.length?Math.round(closed.length/leads.length*100):0;
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">🔍 Analytics</div></div></div>';
+  h+='<div class="grid-4">';
+  h+=kpi(' green','🏆','Vendas Fechadas',closed.length,'','');
+  h+=kpi('','🔄','Conversão',conv+'%','','');
+  h+=kpi(npsScore!==null?(npsScore>=30?' green':' orange'):'','⭐','NPS Score',npsScore!==null?npsScore:'—','','');
+  h+=kpi('','📡','Canais',Object.keys(leads.reduce(function(a,l){if(l.source)a[l.source]=1;return a;},{})).length,'fontes ativas','');
+  h+='</div>';
+  // Tempo de fechamento card
+  h+='<div class="card" style="margin-bottom:20px;border-top:3px solid var(--teal);">';
+  h+='<div class="card-title">⏱️ Tempo de Fechamento & Perfil do Comprador</div>';
+  if(!closedWithDates.length){
+    h+='<div class="alert info"><div class="alert-ico">📊</div><div>Cadastre leads com <strong>Data de Entrada</strong> e <strong>Data da Venda</strong> para ver o perfil ideal de compra e o tempo médio de fechamento.</div></div>';
+  } else {
+    h+='<div class="grid-4" style="margin-bottom:16px;">';
+    h+=kpi('','📅','Média Lead→Venda',avgDays+'d','','');
+    h+=kpi(' green','⚡','Mais rápido',minDays+'d','','');
+    h+=kpi(' orange','🐢','Mais lento',maxDays+'d','','');
+    h+=kpi('','📊','Amostras',closedWithDates.length,'vendas','');
+    h+='</div>';
+    h+='<div class="grid-2">';
+    // Distribuição
+    h+='<div><div class="sec-lbl" style="margin-bottom:10px;">Distribuição por Velocidade</div>';
+    var buckets=[{label:'0–3 dias',min:0,max:3,col:'var(--green)'},{label:'4–7 dias',min:4,max:7,col:'var(--teal)'},{label:'8–14 dias',min:8,max:14,col:'var(--sky)'},{label:'15–30 dias',min:15,max:30,col:'var(--orange)'},{label:'+30 dias',min:31,max:9999,col:'var(--red)'}];
+    buckets.forEach(function(b){
+      var cnt=closedWithDates.filter(function(l){var d=Math.floor((new Date((l.saleDate||l.closedDate)+'T00:00:00')-new Date(l.entryDate+'T00:00:00'))/86400000);return d>=b.min&&d<=b.max;}).length;
+      var pct=closedWithDates.length>0?Math.round(cnt/closedWithDates.length*100):0;
+      h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">';
+      h+='<div style="width:80px;font-size:11px;font-weight:600;color:var(--muted);">'+b.label+'</div>';
+      h+='<div style="flex:1;height:8px;background:var(--bg);border-radius:20px;overflow:hidden;"><div style="width:'+pct+'%;height:100%;background:'+b.col+';border-radius:20px;"></div></div>';
+      h+='<div style="font-size:12px;font-weight:800;min-width:24px;color:'+b.col+';">'+cnt+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+    // Perfil ideal comprador rápido
+    h+='<div><div class="sec-lbl" style="margin-bottom:10px;">🎯 Perfil do Comprador Rápido (≤'+avgDays+'d)</div>';
+    if(!fastBuyers.length){h+='<div class="alert info"><div class="alert-ico">💡</div><div>Dados insuficientes.</div></div>';}
+    else{
+      h+='<div style="background:linear-gradient(135deg,rgba(2,128,144,.07),rgba(2,195,154,.04));border:1px solid rgba(2,128,144,.2);border-radius:12px;padding:16px;">';
+      h+='<div style="font-size:12px;color:var(--muted);margin-bottom:12px;"><strong>'+fastBuyers.length+'</strong> clientes fecharam em até <strong>'+avgDays+' dias</strong>. Foque neste perfil:</div>';
+      if(topSrc){h+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(2,128,144,.15);">';h+='<span style="font-size:18px;">📡</span><div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">Canal que mais converte rápido</div><div style="font-size:14px;font-weight:800;color:var(--teal);">'+topSrc+'</div></div></div>';}
+      if(topDest){h+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(2,128,144,.15);">';h+='<span style="font-size:18px;">🗺️</span><div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">Destino mais frequente</div><div style="font-size:14px;font-weight:800;color:var(--teal);">'+topDest+'</div></div></div>';}
+      var avgBudgetFast=fastBuyers.length>0?Math.round(fastBuyers.reduce(function(a,l){return a+(l.gmv||l.budget||0);},0)/fastBuyers.length):0;
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0;">';
+      h+='<span style="font-size:18px;">💰</span><div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;">Ticket médio</div><div style="font-size:14px;font-weight:800;color:var(--teal);">'+fmtM(avgBudgetFast)+'</div></div></div>';
+      h+='</div>';
+    }
+    h+='</div></div>';
+  }
+  h+='</div>';
+  h+='<div class="card"><div class="card-title">📦 Upsell</div>';
+  upsellM.forEach(function(m){
+    h+='<div class="ups-row"><div class="ups-icon">'+m.icon+'</div><div class="ups-info"><div class="ups-name">'+m.product+'</div><div class="ups-sub">'+m.count+'/'+closed.length+' · meta '+m.goal+'%</div></div>';
+    h+='<div style="text-align:right;">';
+    h+='<div class="ups-pct" style="color:'+(m.pct>=m.goal?'var(--green)':'var(--orange)')+';">'+m.pct+'%</div>';
+    h+='<div class="prog-track" style="width:80px;"><div class="prog-fill" style="width:'+Math.min(m.pct,100)+'%;background:'+(m.pct>=m.goal?'var(--green)':'var(--orange)')+';"></div></div>';
+    h+='</div></div>';
+  });
+  h+='</div>';
+  h+='<div class="card"><div class="card-title">⭐ NPS</div>';
+  if(!npsLeads.length){h+='<div class="empty-state" style="padding:20px;"><div class="empty-icon">⭐</div><div class="empty-text">Nenhum NPS ainda</div></div>';}
+  else{
+    h+='<div style="display:flex;gap:10px;margin-bottom:14px;">';
+    h+='<div style="flex:1;background:#DCFCE7;border-radius:10px;padding:12px;text-align:center;"><div style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:var(--green);">'+npsPro+'</div><div style="font-size:11px;font-weight:700;color:var(--green);">Promotores</div></div>';
+    h+='<div style="flex:1;background:#FEF3C7;border-radius:10px;padding:12px;text-align:center;"><div style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:#92400E;">'+npsNeu+'</div><div style="font-size:11px;font-weight:700;color:#92400E;">Neutros</div></div>';
+    h+='<div style="flex:1;background:#FEF2F2;border-radius:10px;padding:12px;text-align:center;"><div style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:var(--red);">'+npsDet+'</div><div style="font-size:11px;font-weight:700;color:var(--red);">Detratores</div></div>';
+    h+='</div>';
+    h+='<div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center;">';
+    h+='<div style="font-size:11px;color:var(--muted);">NPS Score</div>';
+    h+='<div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:'+(npsScore>=50?'var(--green)':npsScore>=30?'var(--teal)':npsScore>=0?'var(--orange)':'var(--red)')+';">'+npsScore+'</div>';
+    h+='</div>';
+  }
+  h+='</div></div>';
+  h+='<div class="grid-2">';
+  h+='<div class="card"><div class="card-title">🗺️ Destinos</div>';
+  destArr.slice(0,10).forEach(function(d){
+    h+='<div class="dest-bar"><div class="dest-name">'+d.name.split('(')[0].trim()+'</div>';
+    h+='<div class="dest-track"><div class="dest-fill" style="width:'+Math.round(d.gmv/maxGmv*100)+'%;"></div></div>';
+    h+='<div class="dest-val">'+d.cnt+'v · '+fmtM(d.gmv)+'</div></div>';
+  });
+  h+='</div>';
+  h+='<div class="card"><div class="card-title">💔 Motivos de Perda</div>';
+  if(!lossArr.length){h+='<div class="alert ok"><div class="alert-ico">✅</div><div>Nenhuma perda registrada.</div></div>';}
+  else{
+    h+='<div class="table-wrap"><table><thead><tr><th>Motivo</th><th>Qtd</th><th>%</th></tr></thead><tbody>';
+    lossArr.forEach(function(x){
+      h+='<tr><td style="font-size:12px;">'+x.r+'</td><td><strong>'+x.c+'</strong></td>';
+      h+='<td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(x.c/lost.length*100)+'%;background:var(--red);"></div></div>';
+      h+='<span class="bar-pct">'+Math.round(x.c/lost.length*100)+'%</span></div></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='</div></div>';
+  document.getElementById('page-content').innerHTML=h;
+}
+
+// ── TEAM (Admin manages collaborators) ──────────────────────────────────────
+
+function renderTeam(){
+  var users=getUsers();
+  var isAdmin=S.user.role==='admin';
+  var h='';
+  h+='<div class="page-header">';
+  h+='<div><div class="page-title">👔 Equipe</div><div class="page-sub">'+users.length+' colaboradores · Você gerencia acessos, lojas e senhas</div></div>';
+  if(isAdmin)h+='<button class="btn btn-primary btn-sm" id="team-add-btn">+ Novo Colaborador</button>';
+  h+='</div>';
+  if(isAdmin){
+    h+='<div class="info-box">';
+    h+='<div class="info-box-title">🔑 Seu login de Administrador</div>';
+    h+='<div class="info-row"><span class="info-label">E-mail</span><span class="info-val">'+S.user.email+'</span></div>';
+    h+='<div class="info-row"><span class="info-label">Senha</span><span class="info-val">admin2026</span></div>';
+    h+='<div style="font-size:11px;color:var(--muted);margin-top:4px;">Para cadastrar cada colaborador: clique em "+ Novo Colaborador", defina e-mail + senha inicial, loja e papel. Compartilhe o acesso com o colaborador e peça para ele trocar a senha em "🔑 Minha Conta".</div>';
+    h+='</div>';
+  }
+  h+='<div class="grid-3">';
+  users.forEach(function(u){
+    var uLeads=getLeads().filter(function(l){return l.consultantId===u.id;});
+    var closed=uLeads.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var npsV=avgNPS(uLeads.filter(function(l){return l.nps!==null;}));
+    var stores=getStores().filter(function(s){return u.stores&&u.stores.indexOf(s.id)>=0;}).map(function(s){return pillHtml(s.short,'pill-teal');}).join(' ');
+    var statusPill=u.onLeave?pillHtml('Afastado','pill-orange'):u.inTraining?pillHtml('Em treinamento','pill-blue'):!u.active?pillHtml('Inativo','pill-red'):pillHtml('Ativo','pill-green');
+    h+='<div class="team-card" style="border-left-color:'+u.color+';">';
+    h+='<div class="team-card-top">';
+    h+='<div class="team-av" style="background:'+u.color+';">'+u.avatar+'</div>';
+    h+='<div style="flex:1;"><div class="team-name">'+u.name+'</div><div class="team-role">'+ROLES[u.role]+'</div></div>';
+    if(npsV!==null)h+=npsHtml(parseFloat(npsV));
+    h+=statusPill;
+    h+='</div>';
+    h+='<div class="team-info-row">📧 <span style="color:var(--teal);font-weight:600;">'+u.email+'</span></div>';
+    if(u.phone)h+='<div class="team-info-row">📱 '+u.phone+'</div>';
+    h+='<div class="team-info-row" style="flex-wrap:wrap;gap:4px;">🏪 '+(stores||'—')+'</div>';
+    if(u.onLeave&&u.leaveReturn)h+='<div class="team-info-row">📅 Retorno: '+fmtDate(u.leaveReturn)+'</div>';
+    h+='<div class="team-info-row" style="margin-top:4px;">'+uLeads.filter(function(l){return !l.lost&&l.stage!=='fechado';}).length+' leads ativos · '+closed.length+' vendas Abr</div>';
+    if(isAdmin){
+      h+='<div style="display:flex;gap:6px;margin-top:10px;">';
+      h+='<button class="btn btn-primary btn-sm team-edit-btn" data-id="'+u.id+'" style="flex:1;">✏️ Editar</button>';
+      h+='<button class="btn btn-ghost btn-sm team-toggle-btn" data-id="'+u.id+'" data-active="'+(u.active?'1':'0')+'">'+(u.active?'⏸':'▶')+'</button>';
+      if(u.id!==S.user.id)h+='<button class="btn btn-danger btn-sm team-delete-btn" data-id="'+u.id+'" data-name="'+u.name+'" title="Excluir definitivamente">🗑️</button>';
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var addBtn=document.getElementById('team-add-btn');
+    if(addBtn)addBtn.addEventListener('click',function(){openUserForm(null);});
+    pc.querySelectorAll('.team-edit-btn').forEach(function(btn){btn.addEventListener('click',function(){openUserForm(btn.getAttribute('data-id'));});});
+    pc.querySelectorAll('.team-toggle-btn').forEach(function(btn){btn.addEventListener('click',function(){toggleUserActive(btn.getAttribute('data-id'));});});
+    pc.querySelectorAll('.team-delete-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var name=btn.getAttribute('data-name');
+        if(confirm('Excluir definitivamente o colaborador "'+name+'"?\n\nEsta ação não pode ser desfeita. Os leads associados a ele serão mantidos.')){
+          deleteUser(btn.getAttribute('data-id'));
+        }
+      });
+    });
+  }
+}
+
+function openUserForm(userId){
+  var u=userId?getUserById(userId):null;
+  var stores=getStores();
+  var isNew=!u;
+  var h='';
+  h+='<div class="alert info"><div class="alert-ico">ℹ️</div><div>';
+  if(isNew){h+='Preencha os dados do novo colaborador. O e-mail será o login de acesso. Defina uma senha inicial e compartilhe com ele — oriente a trocar em <strong>Minha Conta</strong>.';}
+  else{h+='Edite os dados do colaborador. Deixe o campo de senha em branco para não alterar a senha atual.';}
+  h+='</div></div>';
+  h+='<div class="sec-lbl">Dados Pessoais</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Nome Completo <span style="color:var(--red);">*</span></label><input type="text" id="uf-n" class="finput" value="'+(u&&u.name||'')+'"/><span class="ferr" id="uf-n-e"></span></div>';
+  h+='<div class="fg"><label class="flbl">Apelido / Avatar (2-3 letras) <span style="color:var(--red);">*</span></label><input type="text" id="uf-av" class="finput" value="'+(u&&u.avatar||'')+'" maxlength="3" placeholder="Ex: RM, AT, G"/></div>';
+  h+='</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">E-mail de Acesso (Login) <span style="color:var(--red);">*</span></label><input type="email" id="uf-e" class="finput" value="'+(u&&u.email||'')+'" placeholder="email@exemplo.com"/><span class="ferr" id="uf-e-e"></span></div>';
+  h+='<div class="fg"><label class="flbl">Telefone / WhatsApp</label><input type="text" id="uf-ph" class="finput" value="'+(u&&u.phone||'')+'" placeholder="(31) 99999-0000"/></div>';
+  h+='</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">'+(isNew?'Senha Inicial <span style="color:var(--red);">*</span>':'Nova Senha (vazio = sem alteração)')+'</label>';
+  h+='<input type="text" id="uf-pw" class="finput" value="" placeholder="'+(isNew?'Mín. 6 caracteres — sugestão: CVM@2026!':'Deixar vazio para manter a senha atual')+'"/>';
+  if(isNew)h+='<div style="font-size:10px;color:var(--muted);margin-top:3px;">Após cadastrar, compartilhe e-mail + senha com o colaborador e peça para trocar no 1º acesso.</div>';
+  h+='</div>';
+  h+='<div class="fg"><label class="flbl">Cor de Identificação</label><input type="color" id="uf-cl" class="finput" value="'+(u&&u.color||'#028090')+'" style="height:42px;cursor:pointer;"/></div>';
+  h+='</div>';
+  h+='<div class="sec-divider"></div><div class="sec-lbl">Papel e Lojas</div>';
+  h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">Papel <span style="color:var(--red);">*</span></label><select id="uf-r" class="fselect">';
+  h+='<option value="consultant"'+(u&&u.role==='consultant'?' selected':'')+'>Consultor de Vendas</option>';
+  h+='<option value="posvenda"'+(u&&u.role==='posvenda'?' selected':'')+'>Pós-Vendas</option>';
+  h+='<option value="manager"'+(u&&u.role==='manager'?' selected':'')+'>Gerente</option>';
+  if(S.user.role==='admin')h+='<option value="admin"'+(u&&u.role==='admin'?' selected':'')+'>Administrador</option>';
+  h+='</select></div>';
+  h+='<div class="fg"><label class="flbl">Lojas <span style="color:var(--red);">*</span></label><div class="check-group">';
+  stores.forEach(function(s){h+='<label class="check-item"><input type="checkbox" name="uf-s" value="'+s.id+'"'+((u&&u.stores&&u.stores.indexOf(s.id)>=0)?' checked':'')+'>'+s.short+' — '+s.name+'</label>';});
+  h+='</div></div></div>';
+  h+='<div class="sec-divider"></div><div class="sec-lbl">Status</div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
+  h+='<label class="check-item" style="background:var(--bg);padding:8px 12px;border-radius:8px;"><input type="checkbox" id="uf-ol" '+(u&&u.onLeave?'checked':'')+'>Em Afastamento</label>';
+  h+='<label class="check-item" style="background:var(--bg);padding:8px 12px;border-radius:8px;"><input type="checkbox" id="uf-tr" '+(u&&u.inTraining?'checked':'')+'>Em Treinamento</label>';
+  h+='</div>';
+  h+='<div class="fg"><label class="flbl">Data de Retorno (se afastado)</label><input type="date" id="uf-lr" class="finput" value="'+(u&&u.leaveReturn||'')+'"/></div>';
+  openModal(isNew?'➕ Novo Colaborador':'✏️ Editar — '+( u&&u.name||''),h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var saveBtn=document.createElement('button');saveBtn.className='btn btn-success';saveBtn.textContent='💾 Salvar Colaborador';
+    saveBtn.addEventListener('click',function(){saveUser(userId||'');});
+    footer.appendChild(cancelBtn);footer.appendChild(saveBtn);
+  }
+}
+
+function saveUser(existId){
+  var nEl=document.getElementById('uf-n');var eEl=document.getElementById('uf-e');var phEl=document.getElementById('uf-ph');
+  var pwEl=document.getElementById('uf-pw');var avEl=document.getElementById('uf-av');var clEl=document.getElementById('uf-cl');
+  var rEl=document.getElementById('uf-r');var lrEl=document.getElementById('uf-lr');
+  var olEl=document.getElementById('uf-ol');var trEl=document.getElementById('uf-tr');
+  var name=nEl?nEl.value.trim():'';
+  var email=eEl?eEl.value.trim().toLowerCase():'';
+  var phone=phEl?phEl.value.trim():'';
+  var pw=pwEl?pwEl.value.trim():'';
+  var avatar=avEl&&avEl.value.trim()||name.substring(0,2).toUpperCase();
+  var color=clEl?clEl.value:'#028090';
+  var role=rEl?rEl.value:'consultant';
+  var lr=lrEl?lrEl.value:'';
+  var onLeave=olEl?olEl.checked:false;
+  var inTraining=trEl?trEl.checked:false;
+  var stores=[].slice.call(document.querySelectorAll('input[name=uf-s]:checked')).map(function(i){return i.value;});
+  var ok=true;
+  var nErrEl=document.getElementById('uf-n-e');var eErrEl=document.getElementById('uf-e-e');
+  if(!name){if(nErrEl)nErrEl.textContent='Nome obrigatório';ok=false;}else{if(nErrEl)nErrEl.textContent='';}
+  if(!email||email.indexOf('@')<0){if(eErrEl)eErrEl.textContent='E-mail inválido';ok=false;}else{if(eErrEl)eErrEl.textContent='';}
+  if(!existId&&!pw){showToast('Defina uma senha inicial','error');return;}
+  if(pw&&pw.length<6){showToast('Senha mínima 6 caracteres','error');return;}
+  if(!stores.length){showToast('Selecione ao menos uma loja','error');return;}
+  if(!ok)return;
+  var users=getUsers();
+  if(users.some(function(u){return u.id!==existId&&u.email.toLowerCase()===email;})){if(eErrEl)eErrEl.textContent='E-mail já cadastrado';return;}
+  if(existId){
+    var idx=users.findIndex(function(u){return u.id===existId;});
+    if(idx>=0){users[idx]=Object.assign({},users[idx],{name:name,email:email,phone:phone,avatar:avatar,color:color,role:role,stores:stores,onLeave:onLeave,inTraining:inTraining,leaveReturn:lr||null});if(pw)users[idx].password=pw;}
+  } else {
+    users.push({id:genId(),name:name,email:email,phone:phone,password:pw,role:role,avatar:avatar,color:color,stores:stores,active:true,onLeave:onLeave,inTraining:inTraining,leaveReturn:lr||null});
+  }
+  saveUsers(users);closeModal();
+  if(isNew_check(existId)){showToast('Colaborador cadastrado! Login: '+email+' · Senha inicial: '+pw,'success');}
+  else{showToast('Colaborador atualizado!','success');}
+  logEvent('user_saved',existId?'Editou '+name:'Criou '+name+' ('+email+')');
+  renderTeam();
+}
+
+function isNew_check(existId){return !existId;}
+
+function toggleUserActive(id){
+  var users=getUsers();var i=users.findIndex(function(u){return u.id===id;});if(i<0)return;
+  users[i].active=!users[i].active;saveUsers(users);renderTeam();
+  showToast((users[i].active?'Colaborador ativado!':'Colaborador pausado.'),'info');
+}
+
+function deleteUser(id){
+  var users=getUsers();
+  var updated=users.filter(function(u){return u.id!==id;});
+  saveUsers(updated);
+  logEvent('user_deleted','Excluiu usuário id='+id);
+  showToast('Colaborador excluído.','warn');
+  renderTeam();
+}
+
+// ── ACCOUNT ───────────────────────────────────────────────────────────────────
+
+function renderAccount(){
+  var u=S.user;
+  var myLogs=getLogs().filter(function(l){return l.userId===u.id;}).slice(0,20);
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">🔑 Minha Conta</div><div class="page-sub">Gerencie sua senha e histórico</div></div><div class="sec-badge">🛡️ Acesso seguro</div></div>';
+  h+='<div class="grid-2">';
+  h+='<div class="card">';
+  h+='<div class="card-title">👤 Meus Dados</div>';
+  h+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">'+avHtml(u,52);
+  h+='<div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+u.name+'</div>';
+  h+='<div style="font-size:12px;color:var(--muted);">'+ROLES[u.role]+'</div>';
+  h+='<div style="font-size:12px;color:var(--muted);">'+u.email+'</div>';
+  if(u.phone)h+='<div style="font-size:12px;color:var(--muted);">'+u.phone+'</div>';
+  h+='</div></div>';
+  h+='<div class="divider"></div>';
+  h+='<div class="sec-lbl">Alterar Senha</div>';
+  h+='<div class="fg" style="margin-bottom:10px;"><label class="flbl">Senha Atual <span style="color:var(--red);">*</span></label><input type="password" id="pw-c" class="finput"/></div>';
+  h+='<div class="fg" style="margin-bottom:6px;"><label class="flbl">Nova Senha <span style="color:var(--red);">*</span></label><input type="password" id="pw-n" class="finput" placeholder="Mínimo 8 caracteres"/>';
+  h+='<div id="pw-bar" class="pw-bar" style="background:var(--border);width:0%;"></div><div id="pw-lbl" class="pw-lbl"></div></div>';
+  h+='<div class="fg" style="margin-bottom:14px;"><label class="flbl">Confirmar Nova Senha <span style="color:var(--red);">*</span></label><input type="password" id="pw-cf" class="finput"/></div>';
+  h+='<div id="pw-err" style="color:var(--red);font-size:12px;font-weight:600;margin-bottom:10px;display:none;"></div>';
+  h+='<button class="btn btn-primary" id="pw-change-btn">🔒 Alterar Senha</button>';
+  h+='</div>';
+  h+='<div class="card"><div class="card-title">📋 Histórico de Acesso</div>';
+  if(!myLogs.length){h+='<div class="empty-state" style="padding:20px;"><div class="empty-icon">📋</div><div class="empty-text">Nenhum registro ainda</div></div>';}
+  else{
+    var aLabels={login_ok:'✅ Login realizado',login_fail:'❌ Senha incorreta',otp_fail:'⚠️ OTP inválido',otp_expired:'⏰ OTP expirado',login_blocked:'🚫 Bloqueado',logout:'👋 Saiu',password_changed:'🔒 Senha alterada',export_blocked:'⛔ Exportação bloqueada'};
+    h+='<div style="max-height:380px;overflow-y:auto;">';
+    myLogs.forEach(function(l){
+      var dotCls=l.action==='login_ok'||l.action==='logout'?'ok':l.action==='password_changed'?'pw':'fail';
+      h+='<div class="log-item"><div class="log-dot '+dotCls+'"></div>';
+      h+='<div class="log-time">'+new Date(l.timestamp).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div>';
+      h+='<div class="log-action">'+(aLabels[l.action]||l.action)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div></div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var pwNEl=document.getElementById('pw-n');var pwChangeBtn=document.getElementById('pw-change-btn');
+    if(pwNEl)pwNEl.addEventListener('input',showPwBar);
+    if(pwChangeBtn)pwChangeBtn.addEventListener('click',changePassword);
+  }
+}
+
+function showPwBar(){
+  var pwEl=document.getElementById('pw-n');var pw=pwEl?pwEl.value:'';
+  var s=pwStrength(pw);
+  var colors=['var(--red)','var(--red)','var(--orange)','var(--yellow)','var(--teal)','var(--green)'];
+  var labels=['','Muito fraca','Fraca','Razoável','Boa','Forte!'];
+  var bar=document.getElementById('pw-bar');var lbl=document.getElementById('pw-lbl');
+  if(bar){bar.style.width=(s/5*100)+'%';bar.style.background=colors[s]||'var(--border)';}
+  if(lbl){lbl.textContent=labels[s]||'';lbl.style.color=colors[s]||'';}
+}
+
+function changePassword(){
+  var curEl=document.getElementById('pw-c');var nwEl=document.getElementById('pw-n');var cfEl=document.getElementById('pw-cf');var errEl=document.getElementById('pw-err');
+  var cur=curEl?curEl.value:'';var nw=nwEl?nwEl.value:'';var cf=cfEl?cfEl.value:'';
+  var users=getUsers();var i=users.findIndex(function(u){return u.id===S.user.id;});if(i<0)return;
+  if(users[i].password!==cur){if(errEl){errEl.style.display='block';errEl.textContent='Senha atual incorreta.';}return;}
+  if(nw.length<8){if(errEl){errEl.style.display='block';errEl.textContent='Mínimo 8 caracteres.';}return;}
+  if(nw!==cf){if(errEl){errEl.style.display='block';errEl.textContent='As senhas não coincidem.';}return;}
+  if(pwStrength(nw)<2){if(errEl){errEl.style.display='block';errEl.textContent='Senha muito fraca.';}return;}
+  if(errEl)errEl.style.display='none';
+  users[i].password=nw;saveUsers(users);S.user=users[i];
+  logEvent('password_changed','');
+  showToast('🔒 Senha alterada!','success');
+  if(curEl)curEl.value='';if(nwEl)nwEl.value='';if(cfEl)cfEl.value='';
+  showPwBar();
+}
+
+// ── ACCESS LOGS ───────────────────────────────────────────────────────────────
+
+function renderAccessLogs(){
+  var logs=getLogs();
+  var lok=logs.filter(function(l){return l.action==='login_ok';}).length;
+  var lfail=logs.filter(function(l){return l.action==='login_fail'||l.action==='otp_fail';}).length;
+  var lblocked=logs.filter(function(l){return l.action==='login_blocked';}).length;
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">🛡️ Logs de Acesso</div></div>';
+  h+='<button class="btn btn-primary btn-sm" id="log-export-btn">📊 Exportar CSV</button></div>';
+  h+='<div class="grid-4">';
+  h+=kpi(' green','✅','Logins OK',lok,'','');
+  h+=kpi(' red'+(lfail>0?' pulse':''),'❌','Falhas',lfail,'','');
+  h+=kpi(' orange','🚫','Bloqueados',lblocked,'','');
+  h+=kpi('','📋','Total',logs.length,'','');
+  h+='</div>';
+  if(lblocked>0)h+='<div class="alert danger"><div class="alert-ico">🚨</div><div>'+lblocked+' tentativa(s) bloqueadas.</div></div>';
+  h+='<div class="card"><div class="card-title">📋 Últimos Registros</div>';
+  h+='<div class="filter-bar" style="margin-bottom:12px;">';
+  h+='<select class="fsel" id="lg-f"><option value="">Todos</option>';
+  var logOpts=[['login_ok','✅ Logins OK'],['login_fail','❌ Falhas'],['otp_fail','⚠️ OTP'],['login_blocked','🚫 Bloqueados'],['logout','👋 Saídas'],['password_changed','🔒 Senhas'],['user_saved','👔 Usuários']];
+  logOpts.forEach(function(o){h+='<option value="'+o[0]+'">'+o[1]+'</option>';});
+  h+='</select>';
+  h+='<input type="text" class="fsearch" id="lg-s" placeholder="🔍 Filtrar por usuário..." style="width:200px;"/>';
+  h+='</div>';
+  h+='<div id="logs-list" style="max-height:460px;overflow-y:auto;">'+buildLogItems(logs.slice(0,200))+'</div>';
+  h+='</div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var lgF=document.getElementById('lg-f');var lgS=document.getElementById('lg-s');var expBtn=document.getElementById('log-export-btn');
+    if(lgF)lgF.addEventListener('change',filterLogs);
+    if(lgS)lgS.addEventListener('input',filterLogs);
+    if(expBtn)expBtn.addEventListener('click',exportLogs);
+  }
+}
+
+function buildLogItems(logs){
+  if(!logs.length)return '<div class="empty-state" style="padding:20px;"><div class="empty-icon">📋</div><div class="empty-text">Nenhum log</div></div>';
+  var aLabels={login_ok:'Login OK',login_fail:'Senha incorreta',otp_fail:'OTP inválido',otp_expired:'OTP expirado',login_blocked:'Acesso bloqueado',logout:'Saiu',password_changed:'Senha alterada',export_blocked:'Exportação bloqueada',user_saved:'Usuário salvo'};
+  var h='';
+  logs.forEach(function(l){
+    var dotCls=l.action==='login_ok'||l.action==='logout'?'ok':l.action==='password_changed'||l.action==='user_saved'?'pw':'fail';
+    var bg=l.action==='login_blocked'?'background:#FEF2F2;':l.action.indexOf('fail')>=0?'background:#FFFBEB;':'';
+    h+='<div class="log-item" style="'+bg+'">';
+    h+='<div class="log-dot '+dotCls+'"></div>';
+    h+='<div class="log-time">'+new Date(l.timestamp).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div>';
+    h+='<div class="log-user">'+(l.userName||l.userEmail||'?')+'</div>';
+    h+='<div class="log-action">'+(aLabels[l.action]||l.action)+(l.extra?' · '+l.extra:'')+'</div>';
+    h+='</div>';
+  });
+  return h;
+}
+
+function filterLogs(){
+  var fEl=document.getElementById('lg-f');var sEl=document.getElementById('lg-s');
+  var f=fEl?fEl.value:'';var s=sEl?sEl.value.toLowerCase():'';
+  var logs=getLogs().slice(0,200);
+  if(f)logs=logs.filter(function(l){return l.action===f;});
+  if(s)logs=logs.filter(function(l){return (l.userName||'').toLowerCase().indexOf(s)>=0||(l.userEmail||'').toLowerCase().indexOf(s)>=0;});
+  var el=document.getElementById('logs-list');if(el)el.innerHTML=buildLogItems(logs);
+}
+
+function exportLogs(){
+  var logs=getLogs();
+  var rows=[['Data/Hora','Usuário','E-mail','Papel','Ação','Detalhe']];
+  logs.forEach(function(l){rows.push([new Date(l.timestamp).toLocaleString('pt-BR'),l.userName||'',l.userEmail||'',l.userRole||'',l.action,l.extra||'']);});
+  var csv=rows.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='cvm-logs.csv';a.click();
+  showToast('Logs exportados!','success');
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+
+function renderSettings(){
+  var h='';
+  h+='<div class="page-header"><div><div class="page-title">⚙️ Configurações</div></div></div>';
+  h+='<div class="grid-2">';
+  h+='<div class="card"><div class="card-title">🏪 Lojas</div>';
+  getStores().forEach(function(s){
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px;margin-bottom:8px;">';
+    h+='<div style="width:14px;height:14px;border-radius:50%;background:'+s.color+';"></div>';
+    h+='<div style="flex:1;"><div style="font-weight:700;">'+s.name+'</div><div style="font-size:11px;color:var(--muted);">'+s.location+'</div></div>';
+    h+=pillHtml(s.short,'pill-teal');
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<div class="card"><div class="card-title">🔧 Ações</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:10px;">';
+  if(canExport()){
+    h+='<button class="btn btn-ghost btn-sm" id="set-exp-leads">📊 Exportar Leads CSV</button>';
+    h+='<button class="btn btn-ghost btn-sm" id="set-exp-nps">⭐ Exportar NPS CSV</button>';
+  } else {
+    h+='<div class="alert warn"><div class="alert-ico">🔒</div><div>Exportação disponível apenas para gerentes e admin.</div></div>';
+  }
+  h+='<button class="btn btn-danger btn-sm" id="set-reset">⚠️ Resetar Dados Demo</button>';
+  h+='</div>';
+  h+='<div class="alert sky" style="margin-top:12px;"><div class="alert-ico">🛡️</div><div><strong>Segurança v3:</strong> 2FA OTP · Logs completos · Exportação restrita · Senhas individuais.</div></div>';
+  h+='</div></div>';
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    var expLeads=document.getElementById('set-exp-leads');
+    var expNPS=document.getElementById('set-exp-nps');
+    var resetBtn=document.getElementById('set-reset');
+    if(expLeads)expLeads.addEventListener('click',exportLeads);
+    if(expNPS)expNPS.addEventListener('click',exportNPS);
+    if(resetBtn)resetBtn.addEventListener('click',resetData);
+  }
+}
+
+function exportLeads(){
+  if(!canExport()){showToast('⛔ Exportação restrita','error');logEvent('export_blocked','leads');return;}
+  var leads=visLeads(true);
+  var rows=[['Nome','WhatsApp','Destino','Etapa','GMV','NPS','Loja','Consultor','Data Entrada']];
+  leads.forEach(function(l){rows.push([l.name,l.whatsapp,l.destination,l.stage,l.gmv||l.budget||0,l.nps!=null?l.nps:'',l.storeId,(getUserById(l.consultantId)||{name:''}).name,l.entryDate]);});
+  var csv=rows.map(function(r){return r.join(',');}).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='cvm-leads.csv';a.click();
+  showToast('Exportação iniciada!','success');
+}
+
+function exportNPS(){
+  if(!canExport()){showToast('⛔ Exportação restrita','error');logEvent('export_blocked','nps');return;}
+  var leads=visLeads(true).filter(function(l){return l.nps!==null;});
+  var rows=[['Nome','Destino','NPS','Consultor','Loja']];
+  leads.forEach(function(l){rows.push([l.name,l.destination,l.nps,(getUserById(l.consultantId)||{name:''}).name,l.storeId]);});
+  var csv=rows.map(function(r){return r.join(',');}).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='cvm-nps.csv';a.click();
+  showToast('NPS exportado!','success');
+}
+
+function resetData(){
+  if(!confirm('Resetar todos os dados para o estado inicial?'))return;
+  ['leads','tasks','users','goals','logs'].forEach(function(k){localStorage.removeItem('cvm3_'+k);});
+  showToast('Dados resetados!','info');navigate('dashboard');
+}
+
+// ── MODAL ────────────────────────────────────────────────────────────────────
+
+function openModal(title,body,footer){
+  var titleEl=document.getElementById('modal-title');var bodyEl=document.getElementById('modal-body');var footerEl=document.getElementById('modal-footer');
+  if(titleEl)titleEl.textContent=title;
+  if(bodyEl)bodyEl.innerHTML=body;
+  if(footerEl)footerEl.innerHTML=footer||'';
+  var overlay=document.getElementById('modal-overlay');if(overlay)overlay.classList.remove('hidden');
+}
+function closeModal(){var overlay=document.getElementById('modal-overlay');if(overlay)overlay.classList.add('hidden');}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+
+function showToast(msg,type){
+  type=type||'info';
+  var t=document.createElement('div');
+  t.className='toast '+type;
+  t.textContent=msg;
+  var tc=document.getElementById('toast-container');if(tc)tc.appendChild(t);
+  setTimeout(function(){t.remove();},3500);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+
+function init(){
+  var sid=gls('session');
+  if(sid){
+    var u=getUsers().find(function(x){return x.id===sid;});
+    if(u){S.user=u;document.getElementById('login-screen').style.display='none';document.getElementById('app').classList.remove('hidden');initApp();return;}
+  }
+  bindLoginEvents();
+}
+
+init();
+})();
+</script>
+</body>
+</html>
