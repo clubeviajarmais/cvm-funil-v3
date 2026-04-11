@@ -288,6 +288,7 @@ tr:hover td{background:#F5F8FF;}
   .frow-2,.frow-3{grid-template-columns:1fr;}
   .hamburger{display:block;}
 }
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 @keyframes toastIn{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
 .toast{padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.2);animation:toastIn .3s ease;max-width:320px;}
 .toast.success{background:var(--mint);color:var(--navy);}
@@ -298,6 +299,15 @@ tr:hover td{background:#F5F8FF;}
 </style>
 </head>
 <body>
+
+<div id="loading-screen" style="position:fixed;inset:0;background:linear-gradient(135deg,#0A1830,#1A2E5E);display:flex;align-items:center;justify-content:center;z-index:9999;">
+  <div style="text-align:center;color:#fff;">
+    <div style="font-size:48px;margin-bottom:20px;">✈️</div>
+    <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#fff;margin-bottom:8px;">CVM Vendas</div>
+    <div id="loading-msg" style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:28px;">Conectando ao banco de dados...</div>
+    <div style="width:38px;height:38px;border:3px solid rgba(255,255,255,.15);border-top-color:#02C39A;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>
+  </div>
+</div>
 
 <div id="login-screen">
   <div class="login-card" id="auth-box">
@@ -456,21 +466,84 @@ var SAMPLE_TASKS = [];
 var S = {user:null,view:'dashboard',store:'',dragId:null,lossReason:'',npsVal:null};
 var _otp = null; // {user, code, expires, attempts}
 
-// ── STORAGE ───────────────────────────────────────────────────────────────────
+// ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
+var SUPA_URL='https://chbrdzzpypvwfpqonfqs.supabase.co';
+var SUPA_KEY='sb_publishable_cG7kdMSBRAnADtwQdqTHWw_eF8mZ0ij';
 
+// In-memory DB — loaded from Supabase on startup, written back on every save
+var DB={users:null,leads:null,tasks:null,goals:null,logs:null};
+
+// ── STORAGE (localStorage apenas para sessão) ──────────────────────────────────
 function gls(k){try{var v=localStorage.getItem('cvm3_'+k);return v?JSON.parse(v):null;}catch(e){return null;}}
 function sls(k,v){try{localStorage.setItem('cvm3_'+k,JSON.stringify(v));}catch(e){}}
-function getUsers(){return gls('users')||DEFAULT_USERS;}
-function getStores(){return gls('stores')||DEFAULT_STORES;}
-function getLeads(){return gls('leads')||SAMPLE_LEADS;}
-function getGoals(){return gls('goals')||DEFAULT_GOALS;}
-function getTasks(){return gls('tasks')||SAMPLE_TASKS;}
-function getLogs(){return gls('logs')||[];}
-function saveUsers(v){sls('users',v);}
-function saveLeads(v){sls('leads',v);}
-function saveGoals(v){sls('goals',v);}
-function saveTasks(v){sls('tasks',v);}
-function saveLogs(v){sls('logs',v);}
+
+// ── SUPABASE HELPERS ───────────────────────────────────────────────────────────
+function supaHdrs(){
+  return {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
+}
+function supaGetAll(table){
+  return fetch(SUPA_URL+'/rest/v1/'+table+'?select=*',{headers:supaHdrs()})
+    .then(function(r){
+      if(!r.ok)return r.text().then(function(t){throw new Error(table+': '+t);});
+      return r.json();
+    })
+    .then(function(rows){return rows.map(function(row){return row.data;});});
+}
+function supaUpsertAll(table,records){
+  if(!records||!records.length)return Promise.resolve();
+  var rows=records.map(function(r){return {id:r.id,data:r,updated_at:new Date().toISOString()};});
+  return fetch(SUPA_URL+'/rest/v1/'+table,{
+    method:'POST',
+    headers:Object.assign({},supaHdrs(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+    body:JSON.stringify(rows)
+  });
+}
+function supaDeleteRow(table,id){
+  return fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+encodeURIComponent(id),{
+    method:'DELETE',headers:supaHdrs()
+  });
+}
+function supaGetConfig(key){
+  return fetch(SUPA_URL+'/rest/v1/cvm_config?id=eq.'+key+'&select=*',{headers:supaHdrs()})
+    .then(function(r){return r.ok?r.json():[];})
+    .then(function(rows){return rows.length>0?rows[0].data:null;});
+}
+function supaSetConfig(key,data){
+  return fetch(SUPA_URL+'/rest/v1/cvm_config',{
+    method:'POST',
+    headers:Object.assign({},supaHdrs(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
+    body:JSON.stringify([{id:key,data:data,updated_at:new Date().toISOString()}])
+  });
+}
+
+// ── ACCESSORES (lê do DB em memória, escreve no DB + Supabase) ─────────────────
+function getUsers(){return DB.users||DEFAULT_USERS;}
+function getStores(){return DEFAULT_STORES;}
+function getLeads(){return DB.leads||[];}
+function getGoals(){return DB.goals||DEFAULT_GOALS;}
+function getTasks(){return DB.tasks||[];}
+function getLogs(){return DB.logs||[];}
+
+function saveUsers(v){
+  DB.users=v;
+  supaUpsertAll('cvm_users',v).catch(function(e){console.error('saveUsers:',e);});
+}
+function saveLeads(v){
+  DB.leads=v;
+  supaUpsertAll('cvm_leads',v).catch(function(e){console.error('saveLeads:',e);});
+}
+function saveTasks(v){
+  DB.tasks=v;
+  supaUpsertAll('cvm_tasks',v).catch(function(e){console.error('saveTasks:',e);});
+}
+function saveGoals(v){
+  DB.goals=v;
+  supaSetConfig('goals',v).catch(function(e){console.error('saveGoals:',e);});
+}
+function saveLogs(v){
+  DB.logs=v;
+  supaUpsertAll('cvm_logs',v.slice(0,200)).catch(function(e){console.error('saveLogs:',e);});
+}
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 
@@ -645,7 +718,7 @@ function fillDemo(e,p){
 function doLogout(){
   logEvent('logout','');
   S.user=null;
-  sls('session',null);
+  localStorage.removeItem('cvm3_session');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').style.display='flex';
   resetAuth();
@@ -2224,7 +2297,8 @@ function toggleUserActive(id){
 function deleteUser(id){
   var users=getUsers();
   var updated=users.filter(function(u){return u.id!==id;});
-  saveUsers(updated);
+  DB.users=updated;
+  supaDeleteRow('cvm_users',id).catch(function(e){console.error('deleteUser:',e);});
   logEvent('user_deleted','Excluiu usuário id='+id);
   showToast('Colaborador excluído.','warn');
   renderTeam();
@@ -2383,6 +2457,15 @@ function exportLogs(){
 function renderSettings(){
   var h='';
   h+='<div class="page-header"><div><div class="page-title">⚙️ Configurações</div></div></div>';
+
+  // EXPLICAÇÃO DO PROBLEMA DE SINCRONIZAÇÃO
+  h+='<div class="alert danger" style="margin-bottom:16px;">';
+  h+='<div class="alert-ico">⚠️</div>';
+  h+='<div><strong>Como funciona o banco de dados</strong><br/>';
+  h+='Cada dispositivo tem seu próprio armazenamento local (localStorage). Alterações feitas no seu computador <strong>não aparecem automaticamente</strong> nos dispositivos dos colaboradores.<br/><br/>';
+  h+='<strong>Para atualizar para todos:</strong> depois de editar usuários ou dados, clique em <strong>"📥 Gerar arquivo atualizado"</strong> abaixo, baixe o novo HTML e suba no GitHub. Todos passarão a usar os dados atualizados ao abrir o link.';
+  h+='</div></div>';
+
   h+='<div class="grid-2">';
   h+='<div class="card"><div class="card-title">🏪 Lojas</div>';
   getStores().forEach(function(s){
@@ -2393,28 +2476,41 @@ function renderSettings(){
     h+='</div>';
   });
   h+='</div>';
+
   h+='<div class="card"><div class="card-title">🔧 Ações</div>';
   h+='<div style="display:flex;flex-direction:column;gap:10px;">';
+
+  h+='<div style="padding:12px;background:linear-gradient(135deg,rgba(2,128,144,.07),rgba(2,195,154,.04));border:1px solid rgba(2,128,144,.25);border-radius:10px;">';
+  h+='<div style="font-size:12px;font-weight:800;color:var(--teal);margin-bottom:4px;">📥 Sincronizar para todos os dispositivos</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Gera um novo arquivo HTML com os usuários e configurações atuais gravados. Baixe e suba no GitHub para que todos vejam as atualizações.</div>';
+  h+='<button class="btn btn-primary btn-sm" id="set-exp-html" style="width:100%;">📥 Gerar arquivo atualizado (index.html)</button>';
+  h+='</div>';
+
   if(canExport()){
     h+='<button class="btn btn-ghost btn-sm" id="set-exp-leads">📊 Exportar Leads CSV</button>';
     h+='<button class="btn btn-ghost btn-sm" id="set-exp-nps">⭐ Exportar NPS CSV</button>';
-  } else {
-    h+='<div class="alert warn"><div class="alert-ico">🔒</div><div>Exportação disponível apenas para gerentes e admin.</div></div>';
   }
-  h+='<button class="btn btn-danger btn-sm" id="set-reset">⚠️ Resetar Dados Demo</button>';
-  h+='</div>';
-  h+='<div class="alert sky" style="margin-top:12px;"><div class="alert-ico">🛡️</div><div><strong>Segurança v3:</strong> 2FA OTP · Logs completos · Exportação restrita · Senhas individuais.</div></div>';
+  h+='<button class="btn btn-danger btn-sm" id="set-reset">⚠️ Resetar para padrão de fábrica</button>';
   h+='</div></div>';
+  h+='</div>';
+
   var pc=document.getElementById('page-content');
   if(pc){
     pc.innerHTML=h;
+    var expHTML=document.getElementById('set-exp-html');
     var expLeads=document.getElementById('set-exp-leads');
     var expNPS=document.getElementById('set-exp-nps');
     var resetBtn=document.getElementById('set-reset');
+    if(expHTML)expHTML.addEventListener('click',exportUpdatedHTML);
     if(expLeads)expLeads.addEventListener('click',exportLeads);
     if(expNPS)expNPS.addEventListener('click',exportNPS);
     if(resetBtn)resetBtn.addEventListener('click',resetData);
   }
+}
+
+// ── EXPORTAR HTML ATUALIZADO COM USUÁRIOS GRAVADOS ────────────────────────────
+function exportUpdatedHTML(){
+  showToast('Com Supabase ativo, a sincronização é automática! Não precisa mais exportar o arquivo.','info');
 }
 
 function exportLeads(){
@@ -2440,9 +2536,17 @@ function exportNPS(){
 }
 
 function resetData(){
-  if(!confirm('Resetar todos os dados para o estado inicial?'))return;
-  ['leads','tasks','users','goals','logs'].forEach(function(k){localStorage.removeItem('cvm3_'+k);});
-  showToast('Dados resetados!','info');navigate('dashboard');
+  if(!confirm('Resetar TODOS os dados?\n\nIsso apaga leads, tarefas e logs do banco de dados para TODOS os usuários.'))return;
+  // Limpa memória
+  DB.leads=[];DB.tasks=[];DB.logs=[];
+  DB.users=DEFAULT_USERS;DB.goals=DEFAULT_GOALS;
+  // Grava defaults no Supabase
+  supaUpsertAll('cvm_users',DEFAULT_USERS).catch(function(e){console.error(e);});
+  supaSetConfig('goals',DEFAULT_GOALS).catch(function(e){console.error(e);});
+  // Apaga sessão local
+  localStorage.removeItem('cvm3_session');
+  showToast('Dados resetados! Recarregando...','info');
+  setTimeout(function(){location.reload();},1500);
 }
 
 // ── MODAL ────────────────────────────────────────────────────────────────────
@@ -2470,12 +2574,67 @@ function showToast(msg,type){
 // ── INIT ──────────────────────────────────────────────────────────────────────
 
 function init(){
-  var sid=gls('session');
-  if(sid){
-    var u=getUsers().find(function(x){return x.id===sid;});
-    if(u){S.user=u;document.getElementById('login-screen').style.display='none';document.getElementById('app').classList.remove('hidden');initApp();return;}
-  }
-  bindLoginEvents();
+  var ls=document.getElementById('loading-screen');
+  if(ls)ls.style.display='flex';
+
+  Promise.all([
+    supaGetAll('cvm_users'),
+    supaGetAll('cvm_leads'),
+    supaGetAll('cvm_tasks'),
+    supaGetAll('cvm_logs'),
+    supaGetConfig('goals')
+  ]).then(function(results){
+    var users=results[0]||[];
+    var leads=results[1]||[];
+    var tasks=results[2]||[];
+    var logs=results[3]||[];
+    var goals=results[4];
+
+    DB.users=users.length>0?users:DEFAULT_USERS;
+    DB.leads=leads;
+    DB.tasks=tasks;
+    DB.logs=logs;
+    DB.goals=goals||DEFAULT_GOALS;
+
+    // Primeira vez: grava defaults no Supabase
+    if(users.length===0){
+      supaUpsertAll('cvm_users',DEFAULT_USERS).catch(function(e){console.error(e);});
+    }
+    if(!goals){
+      supaSetConfig('goals',DEFAULT_GOALS).catch(function(e){console.error(e);});
+    }
+
+    if(ls)ls.style.display='none';
+
+    var sid=gls('session');
+    if(sid){
+      var u=getUsers().find(function(x){return x.id===sid;});
+      if(u){
+        S.user=u;
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').classList.remove('hidden');
+        initApp();
+        return;
+      }
+    }
+    document.getElementById('login-screen').style.display='flex';
+    bindLoginEvents();
+
+  }).catch(function(err){
+    console.error('Supabase error:',err);
+    if(ls){
+      ls.innerHTML='<div style="text-align:center;color:#fff;max-width:480px;padding:24px;">'
+        +'<div style="font-size:40px;margin-bottom:16px;">⚠️</div>'
+        +'<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;margin-bottom:10px;">Erro de conexão</div>'
+        +'<div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:16px;line-height:1.6;">'+(err.message||'Erro ao conectar ao banco de dados.')+'</div>'
+        +'<div style="background:rgba(255,255,255,.08);border-radius:10px;padding:14px;text-align:left;font-size:12px;color:rgba(255,255,255,.65);line-height:1.8;margin-bottom:18px;">'
+        +'As tabelas precisam ser criadas no Supabase.<br/>Acesse: <strong>Supabase → SQL Editor → New query</strong> e execute o script de configuração.'
+        +'</div>'
+        +'<button onclick="location.reload()" style="padding:11px 28px;background:#02C39A;border:none;border-radius:9px;font-family:Syne,sans-serif;font-weight:800;font-size:14px;color:#0F1F45;cursor:pointer;">↺ Tentar novamente</button>'
+        +'</div>';
+      ls.style.display='flex';
+    }
+  });
 }
 
 init();
