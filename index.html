@@ -314,15 +314,6 @@ tr:hover td{background:#F5F8FF;}
     <div class="form-group"><label class="form-label">Senha</label><input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/></div>
     <button class="login-btn" id="login-btn">Entrar →</button>
     <div class="login-error" id="login-error"></div>
-    <div class="login-demo">
-      <div class="login-demo-title">Acessos de demonstração</div>
-      <div class="demo-pills">
-        <span class="demo-pill" id="dp1">👑 Admin (Rafael)</span>
-        <span class="demo-pill" id="dp2">🏢 Gerente (Rafaella)</span>
-        <span class="demo-pill" id="dp3">👤 Consultor (Antônio)</span>
-        <span class="demo-pill" id="dp4">👤 Consultor (Gabriel)</span>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -651,12 +642,6 @@ function resetAuth(){
   h+='<div class="form-group"><label class="form-label">Senha</label><input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/></div>';
   h+='<button class="login-btn" id="login-btn">Entrar →</button>';
   h+='<div class="login-error" id="login-error"></div>';
-  h+='<div class="login-demo"><div class="login-demo-title">Acessos de demonstração</div><div class="demo-pills">';
-  h+='<span class="demo-pill" id="dp1">👑 Admin (Rafael)</span>';
-  h+='<span class="demo-pill" id="dp2">🏢 Gerente (Rafaella)</span>';
-  h+='<span class="demo-pill" id="dp3">👤 Consultor (Antônio)</span>';
-  h+='<span class="demo-pill" id="dp4">👤 Consultor (Gabriel)</span>';
-  h+='</div></div>';
   box.innerHTML=h;
   bindLoginEvents();
 }
@@ -664,16 +649,8 @@ function resetAuth(){
 function bindLoginEvents(){
   var btn=document.getElementById('login-btn');
   var passEl=document.getElementById('login-pass');
-  var dp1=document.getElementById('dp1');
-  var dp2=document.getElementById('dp2');
-  var dp3=document.getElementById('dp3');
-  var dp4=document.getElementById('dp4');
   if(btn)btn.addEventListener('click',doLogin);
   if(passEl)passEl.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-  if(dp1)dp1.addEventListener('click',function(){fillDemo('rafael@cvm.com.br','admin2026');});
-  if(dp2)dp2.addEventListener('click',function(){fillDemo('rafaella@cvm.com.br','cvm2026');});
-  if(dp3)dp3.addEventListener('click',function(){fillDemo('antonio@cvm.com.br','cvm2026');});
-  if(dp4)dp4.addEventListener('click',function(){fillDemo('gabriel@cvm.com.br','cvm2026');});
 }
 
 function fillDemo(e,p){
