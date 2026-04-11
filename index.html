@@ -565,32 +565,14 @@ function doLogin(){
 }
 
 function showOTP(user,code){
-  var box=document.getElementById('auth-box');
-  var h='';
-  h+='<div class="otp-icon">🔐</div>';
-  h+='<div class="otp-title">Verificação de Acesso</div>';
-  h+='<div class="otp-sub">Olá, <strong style="color:#fff;">'+user.name+'</strong>!<br/>Código enviado para <span style="color:var(--mint);">'+user.email+'</span></div>';
-  h+='<div class="otp-demo-box">';
-  h+='<div class="otp-demo-label">🧪 Modo Demo — em produção chegaria por e-mail</div>';
-  h+='<div class="otp-code">'+code+'</div>';
-  h+='<div class="otp-exp">Válido por 5 minutos</div>';
-  h+='</div>';
-  h+='<div style="text-align:left;"><label class="form-label">Código de 6 dígitos</label></div>';
-  h+='<input type="text" id="otp-in" class="otp-input" maxlength="6" placeholder="000000"/>';
-  h+='<div class="otp-err" id="otp-err"></div>';
-  h+='<button class="login-btn" id="otp-confirm-btn" style="margin-top:16px;">✓ Confirmar</button>';
-  h+='<br/><button class="otp-back" id="otp-back-btn">← Voltar</button>';
-  box.className='otp-card';
-  box.innerHTML=h;
-  var inp=document.getElementById('otp-in');
-  var confirmBtn=document.getElementById('otp-confirm-btn');
-  var backBtn=document.getElementById('otp-back-btn');
-  if(inp){
-    inp.addEventListener('keydown',function(e){if(e.key==='Enter')verifyOTP();});
-    inp.focus();
-  }
-  if(confirmBtn)confirmBtn.addEventListener('click',verifyOTP);
-  if(backBtn)backBtn.addEventListener('click',resetAuth);
+  // Arquivo estático — sem backend para envio de e-mail. Login direto após senha correta.
+  _otp=null;
+  logAuth(user,null,'login_ok','');
+  S.user=user;
+  sls('session',user.id);
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.remove('hidden');
+  initApp();
 }
 
 function verifyOTP(){
