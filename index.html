@@ -1955,61 +1955,141 @@ function renderTeam(){
   var isAdmin=S.user.role==='admin';
   var h='';
   h+='<div class="page-header">';
-  h+='<div><div class="page-title">👔 Equipe</div><div class="page-sub">'+users.length+' colaboradores · Você gerencia acessos, lojas e senhas</div></div>';
-  if(isAdmin)h+='<button class="btn btn-primary btn-sm" id="team-add-btn">+ Novo Colaborador</button>';
+  h+='<div><div class="page-title">👔 Equipe</div><div class="page-sub">'+users.length+' colaboradores cadastrados</div></div>';
+  if(isAdmin)h+='<div style="display:flex;gap:8px;"><button class="btn btn-ghost btn-sm" id="team-cred-btn">🔑 Ver Credenciais</button><button class="btn btn-primary btn-sm" id="team-add-btn">+ Novo Colaborador</button></div>';
   h+='</div>';
-  if(isAdmin){
-    h+='<div class="info-box">';
-    h+='<div class="info-box-title">🔑 Seu login de Administrador</div>';
-    h+='<div class="info-row"><span class="info-label">E-mail</span><span class="info-val">'+S.user.email+'</span></div>';
-    h+='<div class="info-row"><span class="info-label">Senha</span><span class="info-val">admin2026</span></div>';
-    h+='<div style="font-size:11px;color:var(--muted);margin-top:4px;">Para cadastrar cada colaborador: clique em "+ Novo Colaborador", defina e-mail + senha inicial, loja e papel. Compartilhe o acesso com o colaborador e peça para ele trocar a senha em "🔑 Minha Conta".</div>';
-    h+='</div>';
+
+  // Alerta de e-mails demo
+  var demoEmails=users.filter(function(u){return u.email.indexOf('@cvm.com.br')>=0;});
+  if(isAdmin&&demoEmails.length>0){
+    h+='<div class="alert warn"><div class="alert-ico">⚠️</div><div>';
+    h+='<strong>'+demoEmails.length+' colaborador(es) ainda com e-mail de demonstração</strong> (ex: rafaella@cvm.com.br).<br/>';
+    h+='Clique em <strong>✏️ Editar</strong> em cada um para colocar o e-mail real e definir a senha. ';
+    h+='Ou clique em <strong>🔑 Ver Credenciais</strong> para ver e redefinir senhas rapidamente.';
+    h+='</div></div>';
   }
+
   h+='<div class="grid-3">';
   users.forEach(function(u){
     var uLeads=getLeads().filter(function(l){return l.consultantId===u.id;});
-    var closed=uLeads.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
-    var npsV=avgNPS(uLeads.filter(function(l){return l.nps!==null;}));
+    var closed=uLeads.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda');});
     var stores=getStores().filter(function(s){return u.stores&&u.stores.indexOf(s.id)>=0;}).map(function(s){return pillHtml(s.short,'pill-teal');}).join(' ');
     var statusPill=u.onLeave?pillHtml('Afastado','pill-orange'):u.inTraining?pillHtml('Em treinamento','pill-blue'):!u.active?pillHtml('Inativo','pill-red'):pillHtml('Ativo','pill-green');
-    h+='<div class="team-card" style="border-left-color:'+u.color+';">';
+    var isDemo=u.email.indexOf('@cvm.com.br')>=0;
+    h+='<div class="team-card" style="border-left-color:'+u.color+';'+(isDemo?'border:1.5px solid var(--orange);border-left:4px solid var(--orange);':'')+'">';
     h+='<div class="team-card-top">';
     h+='<div class="team-av" style="background:'+u.color+';">'+u.avatar+'</div>';
-    h+='<div style="flex:1;"><div class="team-name">'+u.name+'</div><div class="team-role">'+ROLES[u.role]+'</div></div>';
-    if(npsV!==null)h+=npsHtml(parseFloat(npsV));
+    h+='<div style="flex:1;"><div class="team-name">'+u.name+'</div><div class="team-role">'+(ROLES[u.role]||u.role)+'</div></div>';
     h+=statusPill;
     h+='</div>';
-    h+='<div class="team-info-row">📧 <span style="color:var(--teal);font-weight:600;">'+u.email+'</span></div>';
+    h+='<div class="team-info-row" style="word-break:break-all;">📧 <span style="color:'+(isDemo?'var(--orange)':'var(--teal)')+';font-weight:600;">'+u.email+'</span>'+(isDemo?' <span style="font-size:9px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:4px;font-weight:700;">DEMO</span>':'')+'</div>';
     if(u.phone)h+='<div class="team-info-row">📱 '+u.phone+'</div>';
     h+='<div class="team-info-row" style="flex-wrap:wrap;gap:4px;">🏪 '+(stores||'—')+'</div>';
     if(u.onLeave&&u.leaveReturn)h+='<div class="team-info-row">📅 Retorno: '+fmtDate(u.leaveReturn)+'</div>';
-    h+='<div class="team-info-row" style="margin-top:4px;">'+uLeads.filter(function(l){return !l.lost&&l.stage!=='fechado';}).length+' leads ativos · '+closed.length+' vendas Abr</div>';
     if(isAdmin){
       h+='<div style="display:flex;gap:6px;margin-top:10px;">';
       h+='<button class="btn btn-primary btn-sm team-edit-btn" data-id="'+u.id+'" style="flex:1;">✏️ Editar</button>';
-      h+='<button class="btn btn-ghost btn-sm team-toggle-btn" data-id="'+u.id+'" data-active="'+(u.active?'1':'0')+'">'+(u.active?'⏸':'▶')+'</button>';
-      if(u.id!==S.user.id)h+='<button class="btn btn-danger btn-sm team-delete-btn" data-id="'+u.id+'" data-name="'+u.name+'" title="Excluir definitivamente">🗑️</button>';
+      h+='<button class="btn btn-sky btn-sm team-pw-btn" data-id="'+u.id+'" data-name="'+u.name+'" title="Redefinir senha">🔑</button>';
+      h+='<button class="btn btn-ghost btn-sm team-toggle-btn" data-id="'+u.id+'">'+(u.active?'⏸':'▶')+'</button>';
+      if(u.id!==S.user.id)h+='<button class="btn btn-danger btn-sm team-delete-btn" data-id="'+u.id+'" data-name="'+u.name+'">🗑️</button>';
       h+='</div>';
     }
     h+='</div>';
   });
   h+='</div>';
+
   var pc=document.getElementById('page-content');
   if(pc){
     pc.innerHTML=h;
     var addBtn=document.getElementById('team-add-btn');
+    var credBtn=document.getElementById('team-cred-btn');
     if(addBtn)addBtn.addEventListener('click',function(){openUserForm(null);});
+    if(credBtn)credBtn.addEventListener('click',showCredentials);
     pc.querySelectorAll('.team-edit-btn').forEach(function(btn){btn.addEventListener('click',function(){openUserForm(btn.getAttribute('data-id'));});});
+    pc.querySelectorAll('.team-pw-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){quickResetPw(btn.getAttribute('data-id'),btn.getAttribute('data-name'));});
+    });
     pc.querySelectorAll('.team-toggle-btn').forEach(function(btn){btn.addEventListener('click',function(){toggleUserActive(btn.getAttribute('data-id'));});});
     pc.querySelectorAll('.team-delete-btn').forEach(function(btn){
       btn.addEventListener('click',function(){
-        var name=btn.getAttribute('data-name');
-        if(confirm('Excluir definitivamente o colaborador "'+name+'"?\n\nEsta ação não pode ser desfeita. Os leads associados a ele serão mantidos.')){
+        if(confirm('Excluir definitivamente "'+btn.getAttribute('data-name')+'"?\nEsta ação não pode ser desfeita.')){
           deleteUser(btn.getAttribute('data-id'));
         }
       });
     });
+  }
+}
+
+// Painel de credenciais — só admin vê
+function showCredentials(){
+  var users=getUsers();
+  var h='<div class="alert warn"><div class="alert-ico">⚠️</div><div>Estas informações são sigilosas. Compartilhe apenas via mensagem privada com cada colaborador. Oriente a trocar a senha no 1º acesso em <strong>🔑 Minha Conta</strong>.</div></div>';
+  h+='<div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail (Login)</th><th>Senha atual</th><th>Papel</th><th>Ação</th></tr></thead><tbody>';
+  users.forEach(function(u){
+    var isDemo=u.email.indexOf('@cvm.com.br')>=0;
+    h+='<tr style="'+(isDemo?'background:#FFFBEB;':'')+'">';
+    h+='<td><div style="display:flex;align-items:center;gap:8px;">'+avHtml(u,26)+'<strong>'+u.name+'</strong></div></td>';
+    h+='<td style="font-family:DM Mono,monospace;font-size:12px;color:'+(isDemo?'var(--orange)':'var(--teal)')+';">'+u.email+(isDemo?' ⚠️ demo':'')+'</td>';
+    h+='<td style="font-family:DM Mono,monospace;font-size:13px;font-weight:800;color:var(--navy);">'+u.password+'</td>';
+    h+='<td>'+pillHtml(ROLES[u.role]||u.role,u.role==='admin'?'pill-purple':u.role==='manager'?'pill-teal':u.role==='posvenda'?'pill-sky':'pill-gray')+'</td>';
+    h+='<td><button class="btn btn-primary btn-sm cred-pw-btn" data-id="'+u.id+'" data-name="'+u.name+'">🔑 Redefinir</button></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  openModal('🔑 Credenciais de Acesso — Todos os Colaboradores',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var closeBtn=document.createElement('button');closeBtn.className='btn btn-ghost';closeBtn.textContent='Fechar';closeBtn.addEventListener('click',closeModal);
+    footer.appendChild(closeBtn);
+  }
+  document.querySelectorAll('.cred-pw-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){quickResetPw(btn.getAttribute('data-id'),btn.getAttribute('data-name'));});
+  });
+}
+
+// Redefinição rápida de senha
+function quickResetPw(userId,userName){
+  var h='';
+  h+='<div class="alert info"><div class="alert-ico">🔑</div><div>Defina a nova senha para <strong>'+userName+'</strong>. Ela entra em vigor imediatamente.</div></div>';
+  h+='<div class="fg">';
+  h+='<label class="flbl">Novo E-mail de acesso (opcional — deixe em branco para manter)</label>';
+  h+='<input type="email" id="qr-email" class="finput" placeholder="novo@email.com"/>';
+  h+='</div>';
+  h+='<div class="fg" style="margin-top:10px;">';
+  h+='<label class="flbl">Nova Senha <span style="color:var(--red);">*</span></label>';
+  h+='<input type="text" id="qr-pw" class="finput" placeholder="Mínimo 6 caracteres" autocomplete="off"/>';
+  h+='<div style="font-size:10px;color:var(--muted);margin-top:3px;">Sugestão: CVM@2026! ou o primeiro nome + ano</div>';
+  h+='</div>';
+  openModal('🔑 Redefinir Acesso — '+userName,h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',function(){closeModal();showCredentials();});
+    var saveBtn=document.createElement('button');saveBtn.className='btn btn-primary';saveBtn.textContent='💾 Salvar';
+    saveBtn.addEventListener('click',function(){
+      var pwEl=document.getElementById('qr-pw');
+      var emailEl=document.getElementById('qr-email');
+      var pw=pwEl?pwEl.value.trim():'';
+      var newEmail=emailEl?emailEl.value.trim().toLowerCase():'';
+      if(!pw||pw.length<6){showToast('Senha mínima 6 caracteres','error');return;}
+      var users=getUsers();
+      var idx=users.findIndex(function(u){return u.id===userId;});
+      if(idx<0){showToast('Usuário não encontrado','error');return;}
+      // Check duplicate email if changing
+      if(newEmail&&newEmail!==users[idx].email){
+        if(newEmail.indexOf('@')<0){showToast('E-mail inválido','error');return;}
+        if(users.some(function(u){return u.id!==userId&&u.email===newEmail;})){showToast('E-mail já usado por outro colaborador','error');return;}
+        users[idx].email=newEmail;
+      }
+      users[idx].password=pw;
+      saveUsers(users);
+      closeModal();
+      showToast('Acesso atualizado! Login: '+(newEmail||users[idx].email)+' · Senha: '+pw,'success');
+      logEvent('user_saved','Reset senha de '+userName);
+      renderTeam();
+    });
+    footer.appendChild(cancelBtn);footer.appendChild(saveBtn);
   }
 }
 
@@ -2067,40 +2147,68 @@ function openUserForm(userId){
 }
 
 function saveUser(existId){
-  var nEl=document.getElementById('uf-n');var eEl=document.getElementById('uf-e');var phEl=document.getElementById('uf-ph');
-  var pwEl=document.getElementById('uf-pw');var avEl=document.getElementById('uf-av');var clEl=document.getElementById('uf-cl');
-  var rEl=document.getElementById('uf-r');var lrEl=document.getElementById('uf-lr');
-  var olEl=document.getElementById('uf-ol');var trEl=document.getElementById('uf-tr');
+  var nEl=document.getElementById('uf-n');
+  var eEl=document.getElementById('uf-e');
+  var phEl=document.getElementById('uf-ph');
+  var pwEl=document.getElementById('uf-pw');
+  var avEl=document.getElementById('uf-av');
+  var clEl=document.getElementById('uf-cl');
+  var rEl=document.getElementById('uf-r');
+  var lrEl=document.getElementById('uf-lr');
+  var olEl=document.getElementById('uf-ol');
+  var trEl=document.getElementById('uf-tr');
+
   var name=nEl?nEl.value.trim():'';
   var email=eEl?eEl.value.trim().toLowerCase():'';
   var phone=phEl?phEl.value.trim():'';
   var pw=pwEl?pwEl.value.trim():'';
-  var avatar=avEl&&avEl.value.trim()||name.substring(0,2).toUpperCase();
+  var avatar=(avEl&&avEl.value.trim())||name.substring(0,2).toUpperCase();
   var color=clEl?clEl.value:'#028090';
   var role=rEl?rEl.value:'consultant';
   var lr=lrEl?lrEl.value:'';
   var onLeave=olEl?olEl.checked:false;
   var inTraining=trEl?trEl.checked:false;
   var stores=[].slice.call(document.querySelectorAll('input[name=uf-s]:checked')).map(function(i){return i.value;});
-  var ok=true;
-  var nErrEl=document.getElementById('uf-n-e');var eErrEl=document.getElementById('uf-e-e');
-  if(!name){if(nErrEl)nErrEl.textContent='Nome obrigatório';ok=false;}else{if(nErrEl)nErrEl.textContent='';}
-  if(!email||email.indexOf('@')<0){if(eErrEl)eErrEl.textContent='E-mail inválido';ok=false;}else{if(eErrEl)eErrEl.textContent='';}
-  if(!existId&&!pw){showToast('Defina uma senha inicial','error');return;}
-  if(pw&&pw.length<6){showToast('Senha mínima 6 caracteres','error');return;}
+
+  // Validações com mensagens claras
+  if(!name){showToast('Informe o nome completo','error');return;}
+  if(!email||email.indexOf('@')<0){showToast('Informe um e-mail válido','error');return;}
+  if(!existId&&!pw){showToast('Defina uma senha inicial para o colaborador','error');return;}
+  if(pw&&pw.length<6){showToast('Senha deve ter pelo menos 6 caracteres','error');return;}
   if(!stores.length){showToast('Selecione ao menos uma loja','error');return;}
-  if(!ok)return;
+
   var users=getUsers();
-  if(users.some(function(u){return u.id!==existId&&u.email.toLowerCase()===email;})){if(eErrEl)eErrEl.textContent='E-mail já cadastrado';return;}
+
+  // Verifica e-mail duplicado (ignora o próprio usuário ao editar)
+  var emailDup=users.some(function(u){return u.id!==existId&&u.email.toLowerCase()===email;});
+  if(emailDup){showToast('Este e-mail já está sendo usado por outro colaborador','error');return;}
+
   if(existId){
     var idx=users.findIndex(function(u){return u.id===existId;});
-    if(idx>=0){users[idx]=Object.assign({},users[idx],{name:name,email:email,phone:phone,avatar:avatar,color:color,role:role,stores:stores,onLeave:onLeave,inTraining:inTraining,leaveReturn:lr||null});if(pw)users[idx].password=pw;}
+    if(idx<0){showToast('Colaborador não encontrado','error');return;}
+    users[idx]=Object.assign({},users[idx],{
+      name:name,email:email,phone:phone,
+      avatar:avatar,color:color,role:role,stores:stores,
+      onLeave:onLeave,inTraining:inTraining,leaveReturn:lr||null
+    });
+    if(pw)users[idx].password=pw;
   } else {
-    users.push({id:genId(),name:name,email:email,phone:phone,password:pw,role:role,avatar:avatar,color:color,stores:stores,active:true,onLeave:onLeave,inTraining:inTraining,leaveReturn:lr||null});
+    users.push({
+      id:genId(),name:name,email:email,phone:phone,
+      password:pw,role:role,avatar:avatar,color:color,
+      stores:stores,active:true,onLeave:onLeave,
+      inTraining:inTraining,leaveReturn:lr||null
+    });
   }
-  saveUsers(users);closeModal();
-  if(isNew_check(existId)){showToast('Colaborador cadastrado! Login: '+email+' · Senha inicial: '+pw,'success');}
-  else{showToast('Colaborador atualizado!','success');}
+
+  saveUsers(users);
+  closeModal();
+
+  if(!existId){
+    showToast('Colaborador cadastrado! Login: '+email+' · Senha: '+pw,'success');
+  } else {
+    showToast('Colaborador atualizado com sucesso!','success');
+  }
   logEvent('user_saved',existId?'Editou '+name:'Criou '+name+' ('+email+')');
   renderTeam();
 }
