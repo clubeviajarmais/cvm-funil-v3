@@ -141,28 +141,28 @@ tr:hover td{background:#F5F8FF;}
 .check-group{display:flex;flex-wrap:wrap;gap:8px;}
 .check-item{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--bg);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;}
 .check-item input{accent-color:var(--teal);}
-.kb-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;align-items:flex-start;}
-.kb-board::-webkit-scrollbar{height:6px;}
-.kb-board::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-.kb-col{min-width:240px;width:240px;flex-shrink:0;}
-.kb-col-hd{padding:10px 12px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between;}
-.kb-col-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#fff;}
-.kb-col-cnt{background:rgba(255,255,255,.25);color:#fff;font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;}
-.kb-col-body{background:rgba(255,255,255,.5);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;min-height:80px;padding:8px;display:flex;flex-direction:column;gap:7px;}
+.kb-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;align-items:start;}
+.kb-col{min-width:0;}
+.kb-col.kb-empty{opacity:.55;}
+.kb-col.kb-empty .kb-col-body{min-height:32px;padding:4px;}
+.kb-col-hd{padding:8px 10px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+.kb-col-title{font-family:'Syne',sans-serif;font-size:10px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kb-col-cnt{background:rgba(255,255,255,.25);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;}
+.kb-col-body{background:rgba(255,255,255,.5);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;min-height:60px;padding:6px;display:flex;flex-direction:column;gap:5px;}
 .kb-col-body.drag-over{background:rgba(2,195,154,.08);border-color:var(--mint);}
-.kb-card{background:var(--surface);border-radius:9px;padding:11px 13px;cursor:grab;box-shadow:0 1px 8px rgba(15,31,69,.08);border:1px solid var(--border);position:relative;}
-.kb-card:hover{box-shadow:0 4px 16px rgba(15,31,69,.14);}
+.kb-card{background:var(--surface);border-radius:7px;padding:8px 10px;cursor:grab;box-shadow:0 1px 6px rgba(15,31,69,.08);border:1px solid var(--border);position:relative;}
+.kb-card:hover{box-shadow:0 3px 12px rgba(15,31,69,.14);}
 .kb-card.dragging{opacity:.5;}
 .kb-card.dup-warn{border-color:var(--orange);border-width:2px;}
 .kb-card.stale-new{border-color:var(--red);border-left:3px solid var(--red);}
 .kb-card.pv-card{border-left:3px solid var(--sky);}
-.card-name{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.card-dest{font-size:11px;color:var(--muted);margin-bottom:4px;}
-.card-gmv{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--teal);}
-.card-meta{display:flex;align-items:center;justify-content:space-between;margin-top:7px;}
-.card-days{font-size:10px;color:var(--muted);}
-.card-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;}
-.card-actions{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap;}
+.card-name{font-size:11px;font-weight:700;color:var(--navy);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-dest{font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-gmv{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--teal);}
+.card-meta{display:flex;align-items:center;justify-content:space-between;margin-top:5px;}
+.card-days{font-size:9px;color:var(--muted);}
+.card-av{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800;color:#fff;}
+.card-actions{display:flex;gap:3px;margin-top:5px;flex-wrap:wrap;}
 .cbtn{padding:4px 8px;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;}
 .cbtn-teal{background:rgba(2,128,144,.1);color:var(--teal);}
 .cbtn-red{background:rgba(229,57,53,.1);color:var(--red);}
@@ -1465,7 +1465,9 @@ function renderKanban(){
     h+='<option value="'+u.id+'">'+u.name+'</option>';
   });
   h+='</select>';
-  h+='<input type="text" class="fsearch" id="kb-s" placeholder="🔍 Buscar lead..."/>';
+  h+='<input type="text" class="fsearch" id="kb-s" placeholder="🔍 Buscar..."/>';
+  h+='<label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;">';
+  h+='<input type="checkbox" id="kb-hide-empty" style="accent-color:var(--teal);" checked/> Ocultar vazias</label>';
   h+='<button class="btn btn-ghost btn-sm" id="kb-cem-btn" style="margin-left:auto;">💀 Cemitério</button></div>';
   h+='<div id="kb-wrap"></div>';
   var pc=document.getElementById('page-content');
@@ -1475,10 +1477,12 @@ function renderKanban(){
     var cemBtn=document.getElementById('kb-cem-btn');
     var consF=document.getElementById('kb-cons');
     var searchF=document.getElementById('kb-s');
+    var hideEl=document.getElementById('kb-hide-empty');
     if(addBtn)addBtn.addEventListener('click',function(){openLeadForm(null);});
     if(cemBtn)cemBtn.addEventListener('click',showCemetery);
     if(consF)consF.addEventListener('change',renderKanbanBoard);
     if(searchF)searchF.addEventListener('input',renderKanbanBoard);
+    if(hideEl)hideEl.addEventListener('change',renderKanbanBoard);
     renderKanbanBoard();
   }
 }
@@ -1487,30 +1491,46 @@ function renderKanbanBoard(){
   var all=visLeads();
   var consEl=document.getElementById('kb-cons');
   var searchEl=document.getElementById('kb-s');
+  var hideEl=document.getElementById('kb-hide-empty');
   var consF=consEl?consEl.value:'';
   var search=searchEl?searchEl.value.toLowerCase():'';
+  var hideEmpty=hideEl?hideEl.checked:true;
   var leads=all.filter(function(l){return !l.lost;});
   if(consF)leads=leads.filter(function(l){return l.consultantId===consF;});
   if(search)leads=leads.filter(function(l){return (l.name||'').toLowerCase().indexOf(search)>=0||(l.destination||'').toLowerCase().indexOf(search)>=0;});
   var wrap=document.getElementById('kb-wrap');
   if(!wrap)return;
-  var h='<div class="kb-board">';
+  var totalActive=leads.filter(function(l){return l.stage!=='fechado'&&l.stage!=='posvenda';}).length;
+  var totalGMV=leads.filter(function(l){return isClosed(l);}).reduce(function(a,l){return a+(l.gmv||0);},0);
+  var stale=leads.filter(function(l){return isStaleNew(l);}).length;
+  var summary='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--surface);border-radius:10px;box-shadow:var(--shadow);font-size:12px;">';
+  summary+='<span>🔥 <strong>'+totalActive+'</strong> em andamento</span>';
+  summary+='<span>💰 <strong>'+fmtM(totalGMV)+'</strong> fechado '+monthLabel(S.month)+'</span>';
+  if(stale>0)summary+='<span style="color:var(--red);">🚨 <strong>'+stale+'</strong> parados +2h</span>';
+  summary+='</div>';
+  var h=summary+'<div class="kb-board">';
   STAGES.filter(function(st){return st.id!=='perdido';}).forEach(function(st){
     var cards=leads.filter(function(l){return l.stage===st.id;});
-    h+='<div class="kb-col">';
-    h+='<div class="kb-col-hd" style="background:'+st.col+';">';
-    h+='<span class="kb-col-title">'+st.icon+' '+st.label+'</span>';
+    var isEmpty=cards.length===0;
+    if(hideEmpty&&isEmpty)return;
+    var colCls='kb-col'+(isEmpty?' kb-empty':'');
+    h+='<div class="'+colCls+'">';
+    h+='<div class="kb-col-hd" style="background:'+st.col+';" title="'+st.label+'">';
+    var shortLabel=st.label.length>12?st.label.substring(0,11)+'…':st.label;
+    h+='<span class="kb-col-title">'+st.icon+' '+shortLabel+'</span>';
     h+='<span class="kb-col-cnt">'+cards.length+'</span></div>';
     h+='<div class="kb-col-body" data-stage="'+st.id+'" id="col-'+st.id+'">';
     cards.forEach(function(l){h+=renderCard(l);});
-    if(st.id!=='fechado'&&st.id!=='posvenda'){
-      h+='<button class="add-lead-btn" data-stage="'+st.id+'">+ Adicionar</button>';
+    if(!isEmpty&&st.id!=='fechado'&&st.id!=='posvenda'){
+      h+='<button class="add-lead-btn" data-stage="'+st.id+'">+ Lead</button>';
+    }
+    if(isEmpty){
+      h+='<div style="font-size:10px;color:var(--muted);text-align:center;padding:6px 0;font-style:italic;">vazia</div>';
     }
     h+='</div></div>';
   });
   h+='</div>';
   wrap.innerHTML=h;
-  // Bind events after render
   wrap.querySelectorAll('.kb-col-body').forEach(function(col){
     col.addEventListener('dragover',function(e){e.preventDefault();col.classList.add('drag-over');});
     col.addEventListener('dragleave',function(){col.classList.remove('drag-over');});
@@ -1528,42 +1548,6 @@ function renderKanbanBoard(){
   wrap.querySelectorAll('.add-lead-btn').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(null,btn.getAttribute('data-stage'));});});
 }
 
-function renderCard(l){
-  var u=getUserById(l.consultantId);
-  var days=l.entryDate?daysSince(l.entryDate):0;
-  var dup=checkDup(l.whatsapp||'',l.id);
-  var stale=isStaleNew(l);
-  var isFuLate=l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado'&&l.stage!=='posvenda';
-  var isFuToday=l.nextFollowup===today()&&l.stage!=='fechado'&&l.stage!=='posvenda';
-  var cls='kb-card';
-  if(dup)cls+=' dup-warn';
-  if(stale)cls+=' stale-new';
-  if(l.stage==='posvenda')cls+=' pv-card';
-  var h='<div class="'+cls+'" id="card-'+l.id+'" draggable="true" data-id="'+l.id+'">';
-  if(dup)h+='<span class="dup-badge">⚠️ DUP</span>';
-  if(l.nps!==null&&l.nps!==undefined)h+='<div style="position:absolute;top:8px;right:8px;">'+npsHtml(l.nps)+'</div>';
-  h+='<div class="card-name">'+l.name+'</div>';
-  h+='<div class="card-dest">'+(l.destination||'—')+'</div>';
-  if(l.gmv||l.budget)h+='<div class="card-gmv">'+fmtM(l.gmv||l.budget||0)+' · '+(l.paxCount||1)+' pax</div>';
-  if(l.stage==='posvenda'&&l.embarqueDate)h+='<div style="font-size:10px;color:var(--sky);font-weight:600;">✈️ '+fmtDateS(l.embarqueDate)+'→'+fmtDateS(l.returnDate||'?')+'</div>';
-  if(stale)h+='<div class="stale-badge">⏱️ '+hoursInStage(l).toFixed(1)+'h sem contato!</div>';
-  if(isFuLate)h+='<div class="card-fu fu-late">🔴 Atrasado '+daysSince(l.nextFollowup)+'d</div>';
-  else if(isFuToday)h+='<div class="card-fu fu-today">🟡 Retorno hoje</div>';
-  else if(l.nextFollowup)h+='<div class="card-fu fu-ok">📅 '+fmtDate(l.nextFollowup)+'</div>';
-  var noIns=(l.stage==='proposta'||l.stage==='negociacao')&&(l.products||[]).indexOf('Seguro Viagem')<0;
-  if(noIns)h+='<div class="no-ins">🛡️ Sem seguro viagem</div>';
-  h+='<div class="card-meta"><span class="card-days">'+days+'d no funil</span>';
-  if(u)h+='<div class="card-av" style="background:'+u.color+';">'+u.avatar+'</div>';
-  h+='</div>';
-  h+='<div class="card-actions">';
-  h+='<button class="cbtn cbtn-teal lead-edit-btn2" data-id="'+l.id+'">✏️ Editar</button>';
-  if(l.stage!=='fechado'&&l.stage!=='posvenda')h+='<button class="cbtn cbtn-orange lead-advance-btn" data-id="'+l.id+'">→</button>';
-  if(l.stage==='fechado')h+='<button class="cbtn cbtn-sky lead-pv-btn" data-id="'+l.id+'">✈️ Embarque</button>';
-  if(l.stage==='posvenda'&&!l.nps)h+='<button class="cbtn cbtn-sky lead-nps-btn" data-id="'+l.id+'">⭐ NPS</button>';
-  if(l.stage!=='perdido'&&l.stage!=='fechado'&&l.stage!=='posvenda')h+='<button class="cbtn cbtn-red lead-lost-btn" data-id="'+l.id+'">✕</button>';
-  h+='</div></div>';
-  return h;
-}
 
 function handleDrop(st){
   if(!S.dragId)return;
