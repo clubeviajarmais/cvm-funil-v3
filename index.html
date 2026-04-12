@@ -325,6 +325,9 @@ tr:hover td{background:#F5F8FF;}
     <div class="form-group"><label class="form-label">E-mail</label><input type="email" id="login-email" class="form-input" placeholder="seu@email.com.br" autocomplete="username"/></div>
     <div class="form-group"><label class="form-label">Senha</label><input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/></div>
     <button class="login-btn" id="login-btn">Entrar →</button>
+    <div style="text-align:center;margin-top:14px;">
+      <button id="forgot-btn" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:12px;cursor:pointer;text-decoration:underline;">Esqueci minha senha</button>
+    </div>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -521,6 +524,69 @@ function consultantMonthGoal(userId,ym){
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
 var SUPA_URL='https://chbrdzzpypvwfpqonfqs.supabase.co';
 var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoYnJkenpweXB2d2ZwcW9uZnFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNzc4OTgsImV4cCI6MjA4ODY1Mzg5OH0.0xflWMXngRDvffTU1s9cpbrrvDZssOrhy9F3LJ0zJHk';
+
+// ── EMAILJS CONFIG ────────────────────────────────────────────────────────────
+// Configure em Configurações → E-mail após criar conta em emailjs.com
+var EMAILJS_SERVICE_ID='service_rpu04ef';
+var EMAILJS_TEMPLATE_ID='template_s6143qt';
+var EMAILJS_PUBLIC_KEY='nku9XNiI_KxwA3iWr';
+
+function getEmailConfig(){
+  try{
+    var c=JSON.parse(localStorage.getItem('cvm3_emailcfg')||'{}');
+    return {
+      serviceId:c.serviceId||EMAILJS_SERVICE_ID,
+      templateId:c.templateId||EMAILJS_TEMPLATE_ID,
+      publicKey:c.publicKey||EMAILJS_PUBLIC_KEY
+    };
+  }catch(e){return {serviceId:'',templateId:'',publicKey:''};}
+}
+function saveEmailConfig(cfg){
+  localStorage.setItem('cvm3_emailcfg',JSON.stringify(cfg));
+}
+
+// Send email via EmailJS REST API
+function sendEmailJS(toEmail,toName,subject,code){
+  var cfg=getEmailConfig();
+  if(!cfg.serviceId||!cfg.templateId||!cfg.publicKey){
+    return Promise.reject(new Error('EmailJS não configurado. Acesse Configurações → E-mail.'));
+  }
+  return fetch('https://api.emailjs.com/api/v1.0/email/send',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      service_id:cfg.serviceId,
+      template_id:cfg.templateId,
+      user_id:cfg.publicKey,
+      template_params:{
+        to_email:toEmail,
+        to_name:toName,
+        email:toEmail,
+        reset_code:code,
+        passcode:code,
+        subject:subject,
+        company:'CVM Clube Viajar Mais'
+      }
+    })
+  }).then(function(r){
+    if(!r.ok)return r.text().then(function(t){throw new Error('EmailJS: '+t);});
+    return r;
+  });
+}
+
+// Reset token helpers via Supabase
+function saveResetToken(email,code){
+  var expires=Date.now()+10*60*1000; // 10 min
+  return supaSetConfig('reset_'+email.toLowerCase(),{code:code,expires:expires,email:email.toLowerCase()});
+}
+function getResetToken(email){
+  return supaGetConfig('reset_'+email.toLowerCase());
+}
+function deleteResetToken(email){
+  return fetch(SUPA_URL+'/rest/v1/cvm_config?id=eq.reset_'+encodeURIComponent(email.toLowerCase()),{
+    method:'DELETE',headers:supaHdrs()
+  });
+}
 
 // In-memory DB — loaded from Supabase on startup, written back on every save
 var DB={users:null,leads:null,tasks:null,goals:null,logs:null,activities:null};
@@ -945,6 +1011,7 @@ function resetAuth(){
   h+='<div class="form-group"><label class="form-label">E-mail</label><input type="email" id="login-email" class="form-input" placeholder="seu@email.com.br" autocomplete="username"/></div>';
   h+='<div class="form-group"><label class="form-label">Senha</label><input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password"/></div>';
   h+='<button class="login-btn" id="login-btn">Entrar →</button>';
+  h+='<div style="text-align:center;margin-top:14px;"><button id="forgot-btn" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:12px;cursor:pointer;text-decoration:underline;">Esqueci minha senha</button></div>';
   h+='<div class="login-error" id="login-error"></div>';
   box.innerHTML=h;
   bindLoginEvents();
@@ -953,8 +1020,209 @@ function resetAuth(){
 function bindLoginEvents(){
   var btn=document.getElementById('login-btn');
   var passEl=document.getElementById('login-pass');
+  var forgotBtn=document.getElementById('forgot-btn');
   if(btn)btn.addEventListener('click',doLogin);
   if(passEl)passEl.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+  if(forgotBtn)forgotBtn.addEventListener('click',showForgotPassword);
+}
+
+// ── FORGOT PASSWORD FLOW ──────────────────────────────────────────────────────
+
+function showForgotPassword(){
+  var box=document.getElementById('auth-box');
+  var h='';
+  h+='<div style="font-size:36px;text-align:center;margin-bottom:14px;">🔐</div>';
+  h+='<div class="login-title" style="font-size:22px;">Recuperar acesso</div>';
+  h+='<div class="login-sub">Digite seu e-mail cadastrado. Vamos enviar um código de verificação.</div>';
+  h+='<div class="form-group"><label class="form-label">E-mail</label>';
+  h+='<input type="email" id="fp-email" class="form-input" placeholder="seu@email.com.br" autocomplete="email"/></div>';
+  h+='<div id="fp-err" style="background:rgba(229,57,53,.2);border:1px solid rgba(229,57,53,.4);color:#ff8080;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:10px;display:none;"></div>';
+  h+='<button class="login-btn" id="fp-send-btn">Enviar código →</button>';
+  h+='<div style="text-align:center;margin-top:14px;"><button id="fp-back-btn" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:12px;cursor:pointer;text-decoration:underline;">← Voltar ao login</button></div>';
+  box.className='login-card';
+  box.innerHTML=h;
+  var emailEl=document.getElementById('fp-email');
+  var sendBtn=document.getElementById('fp-send-btn');
+  var backBtn=document.getElementById('fp-back-btn');
+  if(emailEl)emailEl.focus();
+  if(sendBtn)sendBtn.addEventListener('click',sendResetCode);
+  if(emailEl)emailEl.addEventListener('keydown',function(e){if(e.key==='Enter')sendResetCode();});
+  if(backBtn)backBtn.addEventListener('click',resetAuth);
+}
+
+function sendResetCode(){
+  var emailEl=document.getElementById('fp-email');
+  var errEl=document.getElementById('fp-err');
+  var sendBtn=document.getElementById('fp-send-btn');
+  if(!emailEl||!errEl)return;
+  var email=emailEl.value.trim().toLowerCase();
+  if(!email||email.indexOf('@')<0){
+    errEl.style.display='block';errEl.textContent='Informe um e-mail válido.';return;
+  }
+  // Check if email exists in users
+  var user=getUsers().find(function(u){return u.email.toLowerCase()===email;});
+  if(!user){
+    errEl.style.display='block';errEl.textContent='E-mail não encontrado no sistema.';return;
+  }
+  errEl.style.display='none';
+  if(sendBtn){sendBtn.disabled=true;sendBtn.textContent='Enviando...';}
+  var code=String(Math.floor(100000+Math.random()*900000));
+  // Save token in Supabase
+  saveResetToken(email,code).then(function(){
+    // Send email via EmailJS
+    return sendEmailJS(email,user.name,'Código de recuperação — CVM Vendas',code);
+  }).then(function(){
+    showResetCodeEntry(email,user.name);
+  }).catch(function(err){
+    if(sendBtn){sendBtn.disabled=false;sendBtn.textContent='Enviar código →';}
+    errEl.style.display='block';
+    if(err.message&&err.message.indexOf('não configurado')>=0){
+      errEl.textContent='⚠️ Sistema de e-mail não configurado. Peça ao administrador para configurar em Configurações → E-mail.';
+    } else {
+      errEl.textContent='Erro ao enviar e-mail: '+(err.message||'Tente novamente.');
+    }
+  });
+}
+
+function showResetCodeEntry(email,name){
+  var box=document.getElementById('auth-box');
+  var h='';
+  h+='<div style="font-size:36px;text-align:center;margin-bottom:14px;">📩</div>';
+  h+='<div class="login-title" style="font-size:20px;">Código enviado!</div>';
+  h+='<div class="login-sub">Enviamos um código de 6 dígitos para <span style="color:var(--mint);">'+email+'</span>. Válido por 10 minutos.</div>';
+  h+='<div class="form-group"><label class="form-label">Código de 6 dígitos</label>';
+  h+='<input type="text" id="rc-code" class="form-input" maxlength="6" placeholder="000000" style="text-align:center;font-family:DM Mono,monospace;font-size:22px;letter-spacing:8px;"/></div>';
+  h+='<div id="rc-err" style="background:rgba(229,57,53,.2);border:1px solid rgba(229,57,53,.4);color:#ff8080;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:10px;display:none;"></div>';
+  h+='<button class="login-btn" id="rc-verify-btn">Verificar →</button>';
+  h+='<div style="text-align:center;margin-top:10px;"><button id="rc-resend-btn" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:12px;cursor:pointer;text-decoration:underline;">Reenviar código</button></div>';
+  h+='<div style="text-align:center;margin-top:6px;"><button id="rc-back-btn" style="background:none;border:none;color:rgba(255,255,255,.35);font-size:11px;cursor:pointer;text-decoration:underline;">← Voltar</button></div>';
+  box.className='login-card';
+  box.innerHTML=h;
+  var codeEl=document.getElementById('rc-code');
+  var verifyBtn=document.getElementById('rc-verify-btn');
+  var resendBtn=document.getElementById('rc-resend-btn');
+  var backBtn=document.getElementById('rc-back-btn');
+  if(codeEl){
+    codeEl.focus();
+    codeEl.addEventListener('input',function(){this.value=this.value.replace(/\D/g,'');});
+  }
+  if(verifyBtn)verifyBtn.addEventListener('click',function(){verifyResetCode(email,name);});
+  if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter')verifyResetCode(email,name);});
+  if(resendBtn)resendBtn.addEventListener('click',function(){
+    resendBtn.disabled=true;resendBtn.textContent='Enviando...';
+    var newCode=String(Math.floor(100000+Math.random()*900000));
+    saveResetToken(email,newCode).then(function(){
+      return sendEmailJS(email,name,'Código de recuperação — CVM Vendas',newCode);
+    }).then(function(){
+      resendBtn.disabled=false;resendBtn.textContent='Reenviar código';
+      var errEl=document.getElementById('rc-err');
+      if(errEl){errEl.style.display='block';errEl.style.background='rgba(2,195,154,.15)';errEl.style.borderColor='var(--mint)';errEl.style.color='var(--mint)';errEl.textContent='✅ Novo código enviado!';}
+    }).catch(function(){
+      resendBtn.disabled=false;resendBtn.textContent='Reenviar código';
+    });
+  });
+  if(backBtn)backBtn.addEventListener('click',showForgotPassword);
+}
+
+function verifyResetCode(email,name){
+  var codeEl=document.getElementById('rc-code');
+  var errEl=document.getElementById('rc-err');
+  var verifyBtn=document.getElementById('rc-verify-btn');
+  if(!codeEl||!errEl)return;
+  var entered=(codeEl.value||'').trim();
+  if(entered.length!==6){errEl.style.display='block';errEl.textContent='Digite o código de 6 dígitos.';return;}
+  if(verifyBtn){verifyBtn.disabled=true;verifyBtn.textContent='Verificando...';}
+  errEl.style.display='none';
+  getResetToken(email).then(function(token){
+    if(!token){
+      if(verifyBtn){verifyBtn.disabled=false;verifyBtn.textContent='Verificar →';}
+      errEl.style.display='block';errEl.textContent='Código expirado. Solicite um novo.';return;
+    }
+    if(Date.now()>token.expires){
+      deleteResetToken(email);
+      if(verifyBtn){verifyBtn.disabled=false;verifyBtn.textContent='Verificar →';}
+      errEl.style.display='block';errEl.textContent='Código expirado (10 min). Solicite um novo.';return;
+    }
+    if(token.code!==entered){
+      if(verifyBtn){verifyBtn.disabled=false;verifyBtn.textContent='Verificar →';}
+      errEl.style.display='block';errEl.textContent='Código incorreto. Tente novamente.';return;
+    }
+    // Code valid — show new password screen
+    deleteResetToken(email);
+    showNewPasswordScreen(email,name);
+  }).catch(function(){
+    if(verifyBtn){verifyBtn.disabled=false;verifyBtn.textContent='Verificar →';}
+    errEl.style.display='block';errEl.textContent='Erro ao verificar. Tente novamente.';
+  });
+}
+
+function showNewPasswordScreen(email,name){
+  var box=document.getElementById('auth-box');
+  var h='';
+  h+='<div style="font-size:36px;text-align:center;margin-bottom:14px;">✅</div>';
+  h+='<div class="login-title" style="font-size:20px;">Criar nova senha</div>';
+  h+='<div class="login-sub">Olá, <strong style="color:#fff;">'+name+'</strong>! Defina sua nova senha abaixo.</div>';
+  h+='<div class="form-group"><label class="form-label">Nova senha <span style="color:rgba(255,255,255,.4);font-size:10px;">(mín. 8 caracteres)</span></label>';
+  h+='<input type="password" id="np-pw1" class="form-input" placeholder="••••••••" autocomplete="new-password"/></div>';
+  h+='<div class="form-group"><label class="form-label">Confirmar nova senha</label>';
+  h+='<input type="password" id="np-pw2" class="form-input" placeholder="••••••••" autocomplete="new-password"/></div>';
+  h+='<div id="np-strength" style="height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-bottom:6px;overflow:hidden;"><div id="np-strength-fill" style="height:100%;border-radius:2px;width:0%;transition:width .3s,background .3s;"></div></div>';
+  h+='<div id="np-strength-lbl" style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;"></div>';
+  h+='<div id="np-err" style="background:rgba(229,57,53,.2);border:1px solid rgba(229,57,53,.4);color:#ff8080;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:10px;display:none;"></div>';
+  h+='<button class="login-btn" id="np-save-btn">💾 Salvar nova senha →</button>';
+  box.className='login-card';
+  box.innerHTML=h;
+  var pw1=document.getElementById('np-pw1');
+  var saveBtn=document.getElementById('np-save-btn');
+  var fillEl=document.getElementById('np-strength-fill');
+  var lblEl=document.getElementById('np-strength-lbl');
+  if(pw1){
+    pw1.focus();
+    pw1.addEventListener('input',function(){
+      var s=pwStrength(pw1.value);
+      var colors=['','#ef4444','#f97316','#eab308','#22c55e','#02C39A'];
+      var labels=['','Muito fraca','Fraca','Razoável','Boa','Forte ✓'];
+      if(fillEl){fillEl.style.width=(s/5*100)+'%';fillEl.style.background=colors[s]||'transparent';}
+      if(lblEl){lblEl.textContent=labels[s]||'';lblEl.style.color=colors[s]||'';}
+    });
+  }
+  if(saveBtn)saveBtn.addEventListener('click',function(){saveNewPassword(email);});
+}
+
+function saveNewPassword(email){
+  var pw1El=document.getElementById('np-pw1');
+  var pw2El=document.getElementById('np-pw2');
+  var errEl=document.getElementById('np-err');
+  var saveBtn=document.getElementById('np-save-btn');
+  if(!pw1El||!pw2El||!errEl)return;
+  var pw1=pw1El.value;var pw2=pw2El.value;
+  errEl.style.display='none';
+  if(pw1.length<8){errEl.style.display='block';errEl.textContent='Mínimo 8 caracteres.';return;}
+  if(pw1!==pw2){errEl.style.display='block';errEl.textContent='As senhas não coincidem.';return;}
+  if(pwStrength(pw1)<2){errEl.style.display='block';errEl.textContent='Senha muito fraca. Use letras e números.';return;}
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
+  // Update password in Supabase
+  var users=getUsers();
+  var idx=users.findIndex(function(u){return u.email.toLowerCase()===email;});
+  if(idx<0){errEl.style.display='block';errEl.textContent='Usuário não encontrado.';return;}
+  users[idx].password=pw1;
+  // Save to Supabase
+  supaUpsertAll('cvm_users',users).then(function(){
+    DB.users=users;
+    // Show success and go to login
+    var box=document.getElementById('auth-box');
+    box.innerHTML='<div style="text-align:center;padding:20px 0;">'
+      +'<div style="font-size:56px;margin-bottom:16px;">🎉</div>'
+      +'<div class="login-title" style="font-size:22px;">Senha atualizada!</div>'
+      +'<div class="login-sub" style="margin-bottom:24px;">Sua nova senha foi salva com sucesso.</div>'
+      +'<button class="login-btn" id="ns-login-btn">Fazer login →</button>'
+      +'</div>';
+    var loginBtn=document.getElementById('ns-login-btn');
+    if(loginBtn)loginBtn.addEventListener('click',resetAuth);
+  }).catch(function(err){
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='💾 Salvar nova senha →';}
+    errEl.style.display='block';errEl.textContent='Erro ao salvar. Tente novamente.';
+  });
 }
 
 function fillDemo(e,p){
@@ -2989,16 +3257,7 @@ function exportLogs(){
 function renderSettings(){
   var h='';
   h+='<div class="page-header"><div><div class="page-title">⚙️ Configurações</div></div></div>';
-
-  // EXPLICAÇÃO DO PROBLEMA DE SINCRONIZAÇÃO
-  h+='<div class="alert danger" style="margin-bottom:16px;">';
-  h+='<div class="alert-ico">⚠️</div>';
-  h+='<div><strong>Como funciona o banco de dados</strong><br/>';
-  h+='Cada dispositivo tem seu próprio armazenamento local (localStorage). Alterações feitas no seu computador <strong>não aparecem automaticamente</strong> nos dispositivos dos colaboradores.<br/><br/>';
-  h+='<strong>Para atualizar para todos:</strong> depois de editar usuários ou dados, clique em <strong>"📥 Gerar arquivo atualizado"</strong> abaixo, baixe o novo HTML e suba no GitHub. Todos passarão a usar os dados atualizados ao abrir o link.';
-  h+='</div></div>';
-
-  h+='<div class="grid-2">';
+  h+='<div class="grid-2" style="margin-bottom:16px;">';
   h+='<div class="card"><div class="card-title">🏪 Lojas</div>';
   getStores().forEach(function(s){
     h+='<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px;margin-bottom:8px;">';
@@ -3008,35 +3267,82 @@ function renderSettings(){
     h+='</div>';
   });
   h+='</div>';
-
   h+='<div class="card"><div class="card-title">🔧 Ações</div>';
   h+='<div style="display:flex;flex-direction:column;gap:10px;">';
-
-  h+='<div style="padding:12px;background:linear-gradient(135deg,rgba(2,128,144,.07),rgba(2,195,154,.04));border:1px solid rgba(2,128,144,.25);border-radius:10px;">';
-  h+='<div style="font-size:12px;font-weight:800;color:var(--teal);margin-bottom:4px;">📥 Sincronizar para todos os dispositivos</div>';
-  h+='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Gera um novo arquivo HTML com os usuários e configurações atuais gravados. Baixe e suba no GitHub para que todos vejam as atualizações.</div>';
-  h+='<button class="btn btn-primary btn-sm" id="set-exp-html" style="width:100%;">📥 Gerar arquivo atualizado (index.html)</button>';
-  h+='</div>';
-
   if(canExport()){
     h+='<button class="btn btn-ghost btn-sm" id="set-exp-leads">📊 Exportar Leads CSV</button>';
     h+='<button class="btn btn-ghost btn-sm" id="set-exp-nps">⭐ Exportar NPS CSV</button>';
   }
   h+='<button class="btn btn-danger btn-sm" id="set-reset">⚠️ Resetar para padrão de fábrica</button>';
-  h+='</div></div>';
+  h+='</div></div></div>';
+
+  // EmailJS Configuration
+  var emailCfg=getEmailConfig();
+  var cfgOk=!!(emailCfg.serviceId&&emailCfg.templateId&&emailCfg.publicKey);
+  h+='<div class="card">';
+  h+='<div class="card-title">📧 E-mail — Recuperação de Senha</div>';
+  if(cfgOk){
+    h+='<div class="alert ok" style="margin-bottom:12px;"><div class="alert-ico">✅</div><div>E-mail configurado! Os colaboradores podem usar <strong>"Esqueci minha senha"</strong> na tela de login.</div></div>';
+  } else {
+    h+='<div class="alert warn" style="margin-bottom:12px;"><div class="alert-ico">⚠️</div><div>Sem essa configuração a recuperação de senha não funciona. Siga os passos abaixo (5 min).</div></div>';
+    h+='<div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px;font-size:12px;line-height:1.9;">';
+    h+='<strong style="color:var(--navy);">Passo a passo:</strong><br/>';
+    h+='<strong>1.</strong> Acesse <a href="https://www.emailjs.com" target="_blank" style="color:var(--teal);font-weight:600;">emailjs.com</a> e crie conta gratuita<br/>';
+    h+='<strong>2.</strong> Clique <strong>Add New Service</strong> → Gmail → conecte seu Google<br/>';
+    h+='<strong>3.</strong> Anote o <strong>Service ID</strong> (ex: <code style="background:rgba(0,0,0,.07);padding:1px 5px;border-radius:3px;">service_ab12cd</code>)<br/>';
+    h+='<strong>4.</strong> Vá em <strong>Email Templates → Create New Template</strong> e cole:<br/>';
+    h+='<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;margin:6px 0;font-family:DM Mono,monospace;font-size:11px;color:var(--navy);">';
+    h+='<strong>Assunto:</strong> Código de acesso — CVM Vendas<br/><br/>';
+    h+='Olá {{to_name}},<br/><br/>';
+    h+='Seu código de recuperação de senha é:<br/><br/>';
+    h+='<strong style="font-size:18px;">{{reset_code}}</strong><br/><br/>';
+    h+='Válido por 10 minutos. Se não foi você, ignore.<br/><br/>';
+    h+='CVM Clube Viajar Mais';
+    h+='</div>';
+    h+='<strong>5.</strong> Anote o <strong>Template ID</strong><br/>';
+    h+='<strong>6.</strong> Vá em <strong>Account → General</strong> e anote a <strong>Public Key</strong>';
+    h+='</div>';
+  }
+  h+='<div class="frow frow-3" style="margin-bottom:12px;">';
+  h+='<div class="fg"><label class="flbl">Service ID</label><input type="text" id="ej-sid" class="finput" value="'+(emailCfg.serviceId||'')+'" placeholder="service_ab12cd"/></div>';
+  h+='<div class="fg"><label class="flbl">Template ID</label><input type="text" id="ej-tid" class="finput" value="'+(emailCfg.templateId||'')+'" placeholder="template_xy34ef"/></div>';
+  h+='<div class="fg"><label class="flbl">Public Key</label><input type="text" id="ej-pk" class="finput" value="'+(emailCfg.publicKey||'')+'" placeholder="ABCDE_fg12345"/></div>';
   h+='</div>';
+  h+='<div style="display:flex;gap:8px;">';
+  h+='<button class="btn btn-primary btn-sm" id="set-save-email">💾 Salvar</button>';
+  h+='<button class="btn btn-ghost btn-sm" id="set-test-email">📤 Enviar e-mail de teste</button>';
+  h+='</div></div>';
 
   var pc=document.getElementById('page-content');
   if(pc){
     pc.innerHTML=h;
-    var expHTML=document.getElementById('set-exp-html');
     var expLeads=document.getElementById('set-exp-leads');
     var expNPS=document.getElementById('set-exp-nps');
     var resetBtn=document.getElementById('set-reset');
-    if(expHTML)expHTML.addEventListener('click',exportUpdatedHTML);
+    var saveEmailBtn=document.getElementById('set-save-email');
+    var testEmailBtn=document.getElementById('set-test-email');
     if(expLeads)expLeads.addEventListener('click',exportLeads);
     if(expNPS)expNPS.addEventListener('click',exportNPS);
     if(resetBtn)resetBtn.addEventListener('click',resetData);
+    if(saveEmailBtn)saveEmailBtn.addEventListener('click',function(){
+      var sid=document.getElementById('ej-sid');
+      var tid=document.getElementById('ej-tid');
+      var pk=document.getElementById('ej-pk');
+      if(!sid||!tid||!pk){return;}
+      var cfg={serviceId:sid.value.trim(),templateId:tid.value.trim(),publicKey:pk.value.trim()};
+      if(!cfg.serviceId||!cfg.templateId||!cfg.publicKey){showToast('Preencha os 3 campos.','error');return;}
+      saveEmailConfig(cfg);
+      showToast('✅ Configuração de e-mail salva!','success');
+      renderSettings();
+    });
+    if(testEmailBtn)testEmailBtn.addEventListener('click',function(){
+      var cfg=getEmailConfig();
+      if(!cfg.serviceId||!cfg.templateId||!cfg.publicKey){showToast('Configure o e-mail primeiro.','error');return;}
+      testEmailBtn.disabled=true;testEmailBtn.textContent='Enviando...';
+      sendEmailJS(S.user.email,S.user.name,'Teste de configuração — CVM Vendas','123456')
+        .then(function(){testEmailBtn.disabled=false;testEmailBtn.textContent='📤 Enviar e-mail de teste';showToast('✅ E-mail de teste enviado para '+S.user.email,'success');})
+        .catch(function(err){testEmailBtn.disabled=false;testEmailBtn.textContent='📤 Enviar e-mail de teste';showToast('Erro: '+(err.message||'falha no envio'),'error');});
+    });
   }
 }
 
