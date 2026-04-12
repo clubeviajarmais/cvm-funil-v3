@@ -433,15 +433,16 @@ var UPSELL_GOALS = {
 // ── DEFAULT DATA ───────────────────────────────────────────────────────────────
 
 var DEFAULT_USERS = [
-  {id:'u1',name:'Rafael Oliveira',email:'rafael@cvm.com.br',phone:'(31) 99999-0001',password:'admin2026',role:'admin',stores:['bv','sl','bh'],active:true,avatar:'RO',color:'#0F1F45'},
-  {id:'u2',name:'Rafaella',email:'rafaella@cvm.com.br',phone:'(31) 99999-0002',password:'cvm2026',role:'manager',stores:['bv','sl'],active:true,avatar:'R',color:'#028090'},
-  {id:'u3',name:'Antônio',email:'antonio@cvm.com.br',phone:'(31) 99999-0003',password:'cvm2026',role:'consultant',stores:['bh'],active:true,avatar:'AT',color:'#1D4ED8'},
-  {id:'u4',name:'Gabriel',email:'gabriel@cvm.com.br',phone:'(31) 99999-0004',password:'cvm2026',role:'consultant',stores:['sl'],active:true,avatar:'G',color:'#8B5CF6'},
-  {id:'u5',name:'Fernanda',email:'fernanda@cvm.com.br',phone:'(31) 99999-0005',password:'cvm2026',role:'consultant',stores:['sl'],active:false,onLeave:true,leaveReturn:'2026-04-21',avatar:'F',color:'#E53935'},
-  {id:'u6',name:'Samuel',email:'samuel@cvm.com.br',phone:'(31) 99999-0006',password:'cvm2026',role:'consultant',stores:['bv'],active:true,inTraining:true,avatar:'S',color:'#16A34A'},
-  {id:'u7',name:'Aline',email:'aline@cvm.com.br',phone:'(31) 99999-0007',password:'cvm2026',role:'consultant',stores:['bv'],active:false,onLeave:true,leaveReturn:'2026-04-30',avatar:'A',color:'#F4A261'},
-  {id:'u8',name:'Maria Eduarda',email:'madu@cvm.com.br',phone:'(31) 99999-0008',password:'cvm2026',role:'posvenda',stores:['bv','sl','bh'],active:true,avatar:'ME',color:'#F9C74F'},
-  {id:'u9',name:'Ana Beatriz',email:'anabeatriz@cvm.com.br',phone:'(31) 99999-0009',password:'cvm2026',role:'posvenda',stores:['bv','sl'],active:false,onLeave:true,leaveReturn:'2026-04-11',avatar:'AB',color:'#E91E63'}
+  {id:'u1',name:'Rafael Oliveira',email:'rafaeloliveira@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'admin',stores:['bv','sl','bh'],active:true,avatar:'RO',color:'#0F1F45'},
+  {id:'u2',name:'Rafaella Miranda',email:'rafaellamiranda@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'manager',stores:['bv','sl'],active:true,avatar:'RM',color:'#028090'},
+  {id:'u3',name:'Antônio Vieira',email:'antoniovieira@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bh'],active:true,avatar:'AV',color:'#1D4ED8'},
+  {id:'u4',name:'Gabriel Costa',email:'gabrielcosta@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['sl'],active:true,avatar:'GC',color:'#8B5CF6'},
+  {id:'u5',name:'Fernanda Silva',email:'fernandasilva@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['sl'],active:false,onLeave:true,leaveReturn:'2026-05-01',avatar:'FS',color:'#E53935'},
+  {id:'u6',name:'Samuel Bernardino',email:'samuelbernardino@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:true,inTraining:true,avatar:'SB',color:'#16A34A'},
+  {id:'u7',name:'Aline Campelo',email:'alinecampelo@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:false,onLeave:true,leaveReturn:'2026-05-01',avatar:'AC',color:'#F4A261'},
+  {id:'u8',name:'Maria Eduarda',email:'posvendas@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'posvenda',stores:['bv','sl','bh'],active:true,avatar:'ME',color:'#F9C74F'},
+  {id:'u9',name:'Ana Beatriz Pereira',email:'anapereira@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'posvenda',stores:['bv','sl'],active:false,onLeave:true,leaveReturn:'2026-05-01',avatar:'AB',color:'#E91E63'},
+  {id:'u10',name:'Mônica Araújo',email:'monicaaraujo@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:true,avatar:'MA',color:'#0891B2'}
 ];
 
 var DEFAULT_STORES = [
@@ -3430,17 +3431,34 @@ function init(){
     var goals=results[4];
     var activities=results[5]||[];
 
-    DB.users=users.length>0?users:DEFAULT_USERS;
-    DB.leads=leads;
-    DB.tasks=tasks;
-    DB.logs=logs;
-    DB.goals=goals||DEFAULT_GOALS;
-    DB.activities=activities;
-
-    // Primeira vez: grava defaults no Supabase
-    if(users.length===0){
-      supaUpsertAll('cvm_users',DEFAULT_USERS).catch(function(e){console.error(e);});
-    }
+    // Merge DEFAULT_USERS emails/names into loaded users (keeps passwords set by users, updates emails/names)
+    var mergedUsers=DEFAULT_USERS.map(function(def){
+      var existing=users.find(function(u){return u.id===def.id;});
+      if(existing){
+        // Always update email, name, role, stores from DEFAULT — keep password if user changed it
+        return Object.assign({},existing,{
+          email:def.email,
+          name:def.name,
+          role:def.role,
+          stores:def.stores,
+          avatar:def.avatar,
+          color:def.color,
+          active:def.active,
+          onLeave:def.onLeave||false,
+          inTraining:def.inTraining||false
+        });
+      }
+      return def; // New user not in DB yet
+    });
+    // Also add any NEW users from DEFAULT not in Supabase yet
+    DEFAULT_USERS.forEach(function(def){
+      if(!mergedUsers.find(function(u){return u.id===def.id;})){
+        mergedUsers.push(def);
+      }
+    });
+    DB.users=mergedUsers.length>0?mergedUsers:DEFAULT_USERS;
+    // Always sync merged users to Supabase
+    supaUpsertAll('cvm_users',DB.users).catch(function(e){console.error(e);});
     if(!goals){
       supaSetConfig('goals',DEFAULT_GOALS).catch(function(e){console.error(e);});
     }
