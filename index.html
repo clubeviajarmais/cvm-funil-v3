@@ -3717,7 +3717,7 @@ function renderSettings(){
   if(mondeOk){
     h+='<div class="alert ok" style="margin-bottom:12px;"><div class="alert-ico">✅</div><div>Monde configurado! Use o botão <strong>"Cadastrar no Monde →"</strong> em qualquer venda fechada.</div></div>';
   } else {
-    h+='<div class="alert info" style="margin-bottom:12px;"><div class="alert-ico">💡</div><div>Informe o login e senha do seu usuário admin no Monde. Credenciais ficam salvas <strong>apenas neste dispositivo</strong>.</div></div>';
+    h+='<div class="alert info" style="margin-bottom:12px;"><div class="alert-ico">💡</div><div>Informe o login e senha do <strong>usuário admin do Monde</strong> (só você precisa configurar). As credenciais ficam salvas no <strong>Supabase — funcionam em todos os dispositivos</strong> da equipe automaticamente.</div></div>';
   }
   h+='<div class="frow frow-2" style="margin-bottom:10px;">';
   h+='<div class="fg"><label class="flbl">Login (e-mail do Monde)</label><input type="email" id="mn-login" class="finput" value="'+(mondeCfg.login||'')+'" placeholder="admin@suaagencia.monde.com.br"/></div>';
