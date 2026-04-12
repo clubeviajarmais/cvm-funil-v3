@@ -891,7 +891,270 @@ function registerActivity(type,meta){
   return act;
 }
 
-// ── NUMERIC / CURRENCY HELPERS ────────────────────────────────────────────────
+// ── MONDE API INTEGRATION ─────────────────────────────────────────────────────
+// Credenciais armazenadas no Supabase (cvm_config) para funcionar em todos os dispositivos
+function getMondeConfig(){
+  // Prioridade: Supabase (via DB.mondeConfig) > localStorage (fallback)
+  if(DB.mondeConfig)return DB.mondeConfig;
+  try{return JSON.parse(localStorage.getItem('cvm3_mondecfg')||'{}');}catch(e){return {};}
+}
+function saveMondeConfig(cfg){
+  DB.mondeConfig=cfg;
+  localStorage.setItem('cvm3_mondecfg',JSON.stringify(cfg));
+  // Persiste no Supabase para todos os dispositivos
+  supaSetConfig('monde_config',cfg).catch(function(e){console.error('saveMondeConfig:',e);});
+}
+
+// Mapa de IDs do Monde (carregados na configuração inicial)
+// Estrutura: {companies:{bv:'uuid',sl:'uuid',bh:'uuid'}, categories:{vendaConfirmada:'uuid'}, users:{[cvm_user_id]:'monde_uuid'}}
+var _mondeMap={companies:{},categories:{},users:{}};
+var _mondeToken=null;
+var _mondeTokenExpiry=0;
+
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+function mondeAuth(){
+  var cfg=getMondeConfig();
+  if(!cfg.login||!cfg.password)return Promise.reject(new Error('Monde não configurado. Acesse ⚙️ Configurações → Monde.'));
+  if(_mondeToken&&Date.now()<_mondeTokenExpiry-300000)return Promise.resolve(_mondeToken);
+  return fetch('https://web.monde.com.br/api/v2/tokens',{
+    method:'POST',
+    headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json'},
+    body:JSON.stringify({data:{type:'tokens',attributes:{login:cfg.login,password:cfg.password}}})
+  }).then(function(r){
+    if(!r.ok)return r.json().then(function(e){
+      throw new Error('Login Monde inválido: '+(e&&e.errors&&e.errors[0]&&e.errors[0].detail||'verifique usuário e senha'));
+    });
+    return r.json();
+  }).then(function(d){
+    _mondeToken=d.data.attributes.token;
+    _mondeTokenExpiry=Date.now()+3600000;
+    return _mondeToken;
+  });
+}
+
+// ── BUSCAR MAPEAMENTOS DO MONDE (empresas, categorias, usuários) ──────────────
+function mondeFetchMap(token){
+  var headers={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
+  return Promise.all([
+    fetch('https://web.monde.com.br/api/v2/companies?page[size]=50',{headers:headers}).then(function(r){return r.json();}),
+    fetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:headers}).then(function(r){return r.json();}),
+    fetch('https://web.monde.com.br/api/v2/users?page[size]=50',{headers:headers}).then(function(r){return r.json();}).catch(function(){return {data:[]};})
+  ]).then(function(results){
+    var companies=results[0].data||[];
+    var categories=results[1].data||[];
+    var users=results[2].data||[];
+
+    // Mapear empresas por nome (normalizado)
+    var compMap={};
+    companies.forEach(function(c){
+      var nm=(c.attributes&&c.attributes.name||'').toLowerCase();
+      if(nm.indexOf('boa vista')>=0)compMap.bv=c.id;
+      else if(nm.indexOf('shopping')>=0&&nm.indexOf('lagoas')>=0)compMap.sl=c.id;
+      else if(nm.indexOf('assa')>=0||nm.indexOf('minas')>=0||nm.indexOf('bh')>=0)compMap.bh=c.id;
+    });
+
+    // Mapear categoria "Venda Confirmada"
+    var catMap={};
+    categories.forEach(function(c){
+      var nm=(c.attributes&&c.attributes.name||c.attributes&&c.attributes.title||'').toLowerCase();
+      if(nm.indexOf('venda confirm')>=0||nm.indexOf('vendaconfirm')>=0)catMap.vendaConfirmada=c.id;
+      if(nm.indexOf('geral')>=0&&!catMap.geral)catMap.geral=c.id; // fallback
+    });
+
+    // Mapear usuários Monde ↔ consultores CVM por nome
+    var userMap={};
+    var cvmUsers=getUsers();
+    users.forEach(function(mu){
+      var mundeName=(mu.attributes&&(mu.attributes.name||mu.attributes['full-name']||mu.attributes.login)||'').toLowerCase().trim();
+      cvmUsers.forEach(function(cu){
+        var cvmName=cu.name.toLowerCase().trim();
+        // Match por nome completo ou parte do nome
+        if(mundeName&&cvmName&&(mundeName.indexOf(cvmName.split(' ')[0])>=0||cvmName.indexOf(mundeName.split(' ')[0])>=0)){
+          userMap[cu.id]=mu.id;
+        }
+      });
+    });
+
+    _mondeMap={companies:compMap,categories:catMap,users:userMap,raw:{companies:companies,categories:categories,users:users}};
+    // Salva mapa no Supabase para não buscar toda hora
+    supaSetConfig('monde_map',{map:_mondeMap,updatedAt:nowISO()}).catch(function(){});
+    return _mondeMap;
+  });
+}
+
+function mondeGetMap(token){
+  // Usa mapa em memória se disponível
+  if(Object.keys(_mondeMap.companies).length>0)return Promise.resolve(_mondeMap);
+  // Tenta carregar do Supabase (cache)
+  return supaGetConfig('monde_map').then(function(cached){
+    if(cached&&cached.map&&Object.keys(cached.map.companies||{}).length>0){
+      _mondeMap=cached.map;
+      return _mondeMap;
+    }
+    // Busca do Monde
+    return mondeFetchMap(token);
+  });
+}
+
+// ── VALIDAÇÃO DE CPF ─────────────────────────────────────────────────────────
+function validarCPF(cpf){
+  var c=cpf.replace(/\D/g,'');
+  if(c.length!==11||/^(\d)\1+$/.test(c))return false;
+  var s=0;for(var i=0;i<9;i++)s+=parseInt(c[i])*(10-i);
+  var r=11-(s%11);var d1=r>9?0:r;
+  if(parseInt(c[9])!==d1)return false;
+  s=0;for(var i=0;i<10;i++)s+=parseInt(c[i])*(11-i);
+  r=11-(s%11);var d2=r>9?0:r;
+  return parseInt(c[10])===d2;
+}
+
+// ── BUSCAR PESSOA POR CPF (evita duplicata) ───────────────────────────────────
+function mondeBuscarPorCPF(cpfClean,token){
+  return fetch('https://web.monde.com.br/api/v2/people?filter[cpf]='+cpfClean+'&page[size]=1',{
+    headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token}
+  }).then(function(r){return r.json();}).then(function(d){
+    return (d.data&&d.data.length>0)?d.data[0]:null;
+  });
+}
+
+// ── CRIAR PESSOA ─────────────────────────────────────────────────────────────
+function mondeCriarPessoa(lead,token){
+  var attrs={name:lead.name};
+  var cpfClean=lead.cpf?(lead.cpf.replace(/\D/g,'')):'' ;
+  if(cpfClean&&validarCPF(cpfClean))attrs.cpf=cpfClean;
+  if(lead.birthDate)attrs['birth-date']=lead.birthDate;
+  if(lead.email)attrs.email=lead.email;
+  var waClean=cleanWA(lead.whatsapp||'');
+  if(waClean.length===11)attrs['mobile-phone']=waClean;
+  else if(waClean.length===10)attrs.phone=waClean;
+  return fetch('https://web.monde.com.br/api/v2/people',{
+    method:'POST',
+    headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token},
+    body:JSON.stringify({data:{type:'people',attributes:attrs}})
+  }).then(function(r){
+    if(r.status===201||r.status===200)return r.json();
+    return r.json().then(function(e){throw new Error((e&&e.errors&&e.errors[0]&&e.errors[0].detail)||'Erro '+r.status);});
+  });
+}
+
+// ── CRIAR TAREFA COM EMPRESA, CATEGORIA E RESPONSÁVEL ────────────────────────
+function mondeCriarTarefa(lead,personId,token,map){
+  var consultant=getUserById(lead.consultantId);
+  var store=getStoreById(lead.storeId);
+  var desc='Venda fechada via CVM Funil'
+    +'\nCliente: '+lead.name
+    +(lead.cpf?'\nCPF: '+lead.cpf:'')
+    +'\nDestino: '+(lead.destination||'—')
+    +'\nGMV: '+fmtM(lead.gmv||0)
+    +'\nPax: '+(lead.paxCount||1)+' passageiro(s)'
+    +'\nConsultor: '+(consultant?consultant.name:'—')
+    +'\nLoja: '+(store?store.name:'—')
+    +'\nData da venda: '+(lead.saleDate||lead.closedDate||today())
+    +(lead.travelDate?'\nViagem prevista: '+lead.travelDate:'')
+    +'\n\nCriado automaticamente pelo CVM Funil.';
+
+  var dueDate=lead.embarqueDate||'';
+  if(!dueDate){var d=new Date();d.setDate(d.getDate()+2);dueDate=d.toISOString().substring(0,10);}
+
+  var taskAttrs={title:'Emitir Contrato — '+lead.name,description:desc};
+  if(dueDate)taskAttrs['due-date']=dueDate;
+
+  var rels={};
+  // Vincular pessoa
+  if(personId)rels.person={data:{type:'people',id:personId}};
+  // Vincular empresa (loja correta)
+  var companyId=map&&map.companies&&map.companies[lead.storeId];
+  if(companyId)rels.company={data:{type:'companies',id:companyId}};
+  // Vincular categoria "Venda Confirmada"
+  var catId=map&&map.categories&&(map.categories.vendaConfirmada||map.categories.geral);
+  if(catId)rels['task-category']={data:{type:'task-categories',id:catId}};
+  // Vincular responsável (consultor que fechou)
+  var userId=map&&map.users&&consultant&&map.users[consultant.id];
+  if(userId)rels.responsible={data:{type:'users',id:userId}};
+
+  var body={data:{type:'tasks',attributes:taskAttrs}};
+  if(Object.keys(rels).length>0)body.data.relationships=rels;
+
+  return fetch('https://web.monde.com.br/api/v2/tasks',{
+    method:'POST',
+    headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token},
+    body:JSON.stringify(body)
+  }).then(function(r){
+    if(r.status===201||r.status===200)return r.json();
+    return r.json().then(function(e){throw new Error('Tarefa: '+((e&&e.errors&&e.errors[0]&&e.errors[0].detail)||'Erro '+r.status));});
+  });
+}
+
+// ── CADASTRAR NO MONDE (fluxo completo com todas as correções) ────────────────
+function cadastrarNoMonde(leadId,btn){
+  var leads=getLeads();
+  var lead=leads.find(function(l){return l.id===leadId;});
+  if(!lead){showToast('Lead não encontrado.','error');return;}
+  var cfg=getMondeConfig();
+  if(!cfg.login||!cfg.password){
+    showToast('Configure as credenciais em ⚙️ Configurações → Monde.','error');
+    return;
+  }
+  // PROTEÇÃO: se já tem mondeId, confirmar antes de recriar (evita pessoa duplicada)
+  if(lead.mondeId){
+    var ok=confirm('Este cliente já foi cadastrado no Monde (ID: '+lead.mondeId+').\n\nReenviar vai criar um NOVO registro. Deseja continuar?');
+    if(!ok)return;
+  }
+  if(btn){btn.disabled=true;btn.textContent='⏳ Sincronizando...';}
+  var _token='';
+  var _map={};
+
+  mondeAuth()
+    .then(function(token){
+      _token=token;
+      return mondeGetMap(token);
+    })
+    .then(function(map){
+      _map=map;
+      // BUSCA POR CPF PRIMEIRO para evitar duplicata
+      var cpfClean=lead.cpf?lead.cpf.replace(/\D/g,''):'';
+      if(cpfClean&&validarCPF(cpfClean)){
+        return mondeBuscarPorCPF(cpfClean,_token).then(function(existing){
+          if(existing){
+            // Cliente já existe no Monde — usa ID existente
+            showToast('ℹ️ Cliente já existe no Monde — vinculando tarefa ao cadastro existente','info');
+            return {data:existing,existia:true};
+          }
+          return mondeCriarPessoa(lead,_token).then(function(d){return {data:d.data,existia:false};});
+        });
+      }
+      return mondeCriarPessoa(lead,_token).then(function(d){return {data:d.data,existia:false};});
+    })
+    .then(function(pessoaResult){
+      var mondePersonId=pessoaResult.data&&pessoaResult.data.id||'';
+      // Salva mondeId parcialmente JÁ AQUI — evita Pessoa duplicada se Tarefa falhar
+      var idx=leads.findIndex(function(l){return l.id===leadId;});
+      if(idx>=0){leads[idx].mondeId=mondePersonId;leads[idx].mondePersonExistia=pessoaResult.existia||false;saveLeads(leads);}
+      return mondeCriarTarefa(lead,mondePersonId,_token,_map)
+        .then(function(tarefaData){return {mondeId:mondePersonId,mondeTaskId:tarefaData&&tarefaData.data&&tarefaData.data.id||'',existia:pessoaResult.existia};});
+    })
+    .then(function(result){
+      var idx=leads.findIndex(function(l){return l.id===leadId;});
+      if(idx>=0){
+        leads[idx].mondeSynced=true;
+        leads[idx].mondeId=result.mondeId;
+        leads[idx].mondeTaskId=result.mondeTaskId;
+        leads[idx].mondeSyncedAt=nowISO();
+        saveLeads(leads);
+      }
+      if(btn){btn.disabled=false;btn.textContent='✅ Cadastrado!';}
+      var msg=result.existia
+        ?'✅ Pessoa já existia no Monde — Tarefa "Emitir Contrato" criada e vinculada!'
+        :'✅ Pessoa + Tarefa "Emitir Contrato" criados no Monde!';
+      showToast(msg,'success');
+      logEvent('monde_sync',msg+' | Lead: '+lead.name+' | Pessoa='+result.mondeId+' | Tarefa='+result.mondeTaskId);
+      setTimeout(function(){var l2=getLeads().find(function(x){return x.id===leadId;});if(l2)openLeadForm(l2);},800);
+    })
+    .catch(function(err){
+      if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
+      showToast('Erro Monde: '+(err.message||'falha desconhecida'),'error');
+    });
+}
 function parseRawVal(el){
   if(!el)return 0;
   var raw=el.getAttribute('data-raw');
@@ -1647,11 +1910,70 @@ function renderManager(){
     h+='</div>';
   });
   h+='</div>';
+
+  // ── PAINEL DE RECONCILIAÇÃO MONDE ──────────────────────────────────────────
+  var allLeads=visLeads(true);
+  var closedMonth=allLeads.filter(function(l){return isClosed(l)&&filterByMonth(l);});
+  var synced=closedMonth.filter(function(l){return l.mondeSynced;});
+  var notSynced=closedMonth.filter(function(l){return !l.mondeSynced;});
+  var mondeConfigured=!!(getMondeConfig().login&&getMondeConfig().password);
+  var syncPct=closedMonth.length>0?Math.round(synced.length/closedMonth.length*100):0;
+
+  h+='<div class="sec-lbl" style="margin:20px 0 12px;">🌍 Reconciliação Monde — '+monthLabel(S.month)+'</div>';
+  h+='<div class="card">';
+  h+='<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;">';
+  h+='<div style="flex:1;min-width:180px;">';
+  h+='<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;">';
+  h+='<span>Vendas no Monde</span><span style="color:'+(syncPct===100?'var(--green)':syncPct>=50?'var(--orange)':'var(--red)')+';">'+synced.length+'/'+closedMonth.length+' ('+syncPct+'%)</span>';
+  h+='</div>';
+  h+='<div class="prog-track" style="height:10px;"><div class="prog-fill" style="width:'+syncPct+'%;background:'+(syncPct===100?'var(--green)':syncPct>=50?'var(--orange)':'var(--red)')+';"></div></div>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:10px;">';
+  h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:8px 14px;"><div style="font-size:10px;color:var(--muted);">Sincronizadas</div><div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:var(--green);">'+synced.length+'</div></div>';
+  h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:8px 14px;"><div style="font-size:10px;color:var(--muted);">Pendentes</div><div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:'+(notSynced.length>0?'var(--red)':'var(--green)')+';">'+notSynced.length+'</div></div>';
+  h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:8px 14px;"><div style="font-size:10px;color:var(--muted);">Total Fechado</div><div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:var(--navy);">'+closedMonth.length+'</div></div>';
+  h+='</div></div>';
+  if(!mondeConfigured){
+    h+='<div class="alert warn"><div class="alert-ico">⚠️</div><div>Monde não configurado. Acesse <strong>⚙️ Configurações → Monde</strong> para habilitar a integração.</div></div>';
+  } else if(closedMonth.length===0){
+    h+='<div class="alert info"><div class="alert-ico">ℹ️</div><div>Nenhuma venda fechada em '+monthLabel(S.month)+' ainda.</div></div>';
+  } else {
+    h+='<div class="table-wrap"><table>';
+    h+='<thead><tr><th>Cliente</th><th>Consultor</th><th>Loja</th><th>GMV</th><th>Data Venda</th><th>Status Monde</th><th>Ação</th></tr></thead><tbody>';
+    // Sort: not synced first
+    var sorted=closedMonth.slice().sort(function(a,b){return (a.mondeSynced?1:0)-(b.mondeSynced?1:0);});
+    sorted.forEach(function(l){
+      var cons=getUserById(l.consultantId);
+      var store=getStoreById(l.storeId);
+      h+='<tr>';
+      h+='<td><div style="font-weight:700;font-size:12px;">'+l.name+'</div>'+(l.cpf?'<div style="font-size:10px;color:var(--muted);">CPF: '+l.cpf+'</div>':'')+'</td>';
+      h+='<td style="font-size:12px;">'+(cons?cons.name:'—')+'</td>';
+      h+='<td>'+(store?pillHtml(store.short,'pill-teal'):'—')+'</td>';
+      h+='<td style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;">'+fmtM(l.gmv||0)+'</td>';
+      h+='<td style="font-size:12px;">'+(l.saleDate||l.closedDate||'—')+'</td>';
+      if(l.mondeSynced){
+        h+='<td><div style="display:flex;align-items:center;gap:5px;"><span style="color:var(--green);font-size:14px;">✅</span><div><div style="font-size:11px;font-weight:700;color:var(--green);">Sincronizado</div>';
+        if(l.mondeTaskId)h+='<div style="font-size:10px;color:var(--muted);">Tarefa #'+l.mondeTaskId+'</div>';
+        h+='</div></div></td>';
+        h+='<td><button class="btn btn-ghost btn-sm monde-resync-row" data-id="'+l.id+'" style="font-size:11px;">↺ Reenviar</button></td>';
+      } else {
+        h+='<td><span style="color:var(--red);font-size:13px;font-weight:700;">⏳ Pendente</span></td>';
+        h+='<td><button class="btn btn-primary btn-sm monde-sync-row" data-id="'+l.id+'">Cadastrar →</button></td>';
+      }
+      h+='</tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='</div>';
+
   var pc=document.getElementById('page-content');
   if(pc){
     pc.innerHTML=h;
     pc.querySelectorAll('.cons-profile-btn').forEach(function(btn){
       btn.addEventListener('click',function(){openConsultantProfile(btn.getAttribute('data-id'));});
+    });
+    pc.querySelectorAll('.monde-sync-row,.monde-resync-row').forEach(function(btn){
+      btn.addEventListener('click',function(){cadastrarNoMonde(btn.getAttribute('data-id'),btn);});
     });
   }
 }
@@ -2080,10 +2402,36 @@ function openLeadForm(lead,stagePreset){
   h+='<div class="fg"><label class="flbl">WhatsApp <span style="color:var(--red);">*</span></label><input type="text" id="lf-w" class="finput" value="'+(lead&&lead.whatsapp||'')+'" placeholder="(31) 99999-9999"/><span id="lf-w-m"></span></div>';
   h+='</div>';
   h+='<div class="frow frow-2">';
+  h+='<div class="fg"><label class="flbl">CPF <span style="font-size:10px;color:var(--muted);">(para cadastro no Monde)</span></label><input type="text" id="lf-cpf" class="finput" value="'+(lead&&lead.cpf||'')+'" placeholder="000.000.000-00" maxlength="14"/></div>';
+  h+='<div class="fg"><label class="flbl">Data de Nascimento <span style="font-size:10px;color:var(--muted);">(para Monde)</span></label><input type="date" id="lf-birth" class="finput" value="'+(lead&&lead.birthDate||'')+'"/></div>';
+  h+='</div>';
+  h+='<div class="frow frow-2">';
   h+='<div class="fg"><label class="flbl">E-mail</label><input type="email" id="lf-e" class="finput" value="'+(lead&&lead.email||'')+'"/></div>';
   h+='<div class="fg"><label class="flbl">Origem</label><select id="lf-src" class="fselect">';
   SOURCES.forEach(function(s){h+='<option value="'+s+'"'+(lead&&lead.source===s?' selected':'')+'>'+s+'</option>';});
   h+='</select></div></div>';
+  // Monde sync status badge
+  if(lead&&(lead.stage==='fechado'||lead.stage==='posvenda')){
+    if(lead.mondeSynced){
+      h+='<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:9px;padding:10px 14px;margin-bottom:8px;">';
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+      h+='<span style="font-size:16px;">✅</span>';
+      h+='<div style="font-size:13px;font-weight:800;color:#166534;">Sincronizado com Monde</div>';
+      h+='<button type="button" id="monde-resync-btn" class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px;">↺ Reenviar</button>';
+      h+='</div>';
+      h+='<div style="display:flex;gap:16px;flex-wrap:wrap;">';
+      if(lead.mondeId)h+='<div style="font-size:11px;color:#166534;">👤 Pessoa: <code style="background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px;">#'+lead.mondeId+'</code></div>';
+      if(lead.mondeTaskId)h+='<div style="font-size:11px;color:#166534;">📋 Tarefa "Emitir Contrato": <code style="background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px;">#'+lead.mondeTaskId+'</code></div>';
+      if(lead.mondeSyncedAt)h+='<div style="font-size:11px;color:#166534;">🕐 '+fmtDate(lead.mondeSyncedAt.substring(0,10))+'</div>';
+      h+='</div></div>';
+    } else {
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#EFF6FF;border:1.5px solid #93C5FD;border-radius:9px;margin-bottom:8px;">';
+      h+='<span style="font-size:18px;">🌍</span>';
+      h+='<div style="font-size:12px;color:#1D4ED8;flex:1;"><strong>Venda fechada</strong> — Cadastre no Monde para criar Pessoa + Tarefa "Emitir Contrato"</div>';
+      h+='<button type="button" id="monde-sync-btn" class="btn btn-primary btn-sm">Cadastrar no Monde →</button>';
+      h+='</div>';
+    }
+  }
   h+='<div class="sec-divider"></div><div class="sec-lbl">Viagem</div>';
   h+='<div class="frow frow-2">';
   h+='<div class="fg"><label class="flbl">Destino <span style="color:var(--red);">*</span></label><select id="lf-d" class="fselect"><option value="">Selecione...</option>';
@@ -2137,6 +2485,22 @@ function openLeadForm(lead,stagePreset){
   }
   var waEl=document.getElementById('lf-w');
   if(waEl)waEl.addEventListener('input',checkWAField);
+  // CPF mask
+  var cpfEl=document.getElementById('lf-cpf');
+  if(cpfEl)cpfEl.addEventListener('input',function(){
+    var v=this.value.replace(/\D/g,'').slice(0,11);
+    if(v.length>9)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
+    else if(v.length>6)v=v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
+    else if(v.length>3)v=v.slice(0,3)+'.'+v.slice(3);
+    this.value=v;
+  });
+  // Monde sync buttons
+  if(lead){
+    var syncBtn=document.getElementById('monde-sync-btn');
+    var resyncBtn=document.getElementById('monde-resync-btn');
+    if(syncBtn)syncBtn.addEventListener('click',function(){cadastrarNoMonde(lead.id,syncBtn);});
+    if(resyncBtn)resyncBtn.addEventListener('click',function(){cadastrarNoMonde(lead.id,resyncBtn);});
+  }
 }
 
 function checkWAField(){
@@ -2179,6 +2543,8 @@ function saveLead(existId){
   var name=(document.getElementById('lf-n')&&document.getElementById('lf-n').value||'').trim();
   var wa=(document.getElementById('lf-w')&&document.getElementById('lf-w').value||'').trim();
   var email=(document.getElementById('lf-e')&&document.getElementById('lf-e').value||'').trim();
+  var cpf=(document.getElementById('lf-cpf')&&document.getElementById('lf-cpf').value||'').trim();
+  var birthDate=(document.getElementById('lf-birth')&&document.getElementById('lf-birth').value||'');
   var dest=(document.getElementById('lf-d')&&document.getElementById('lf-d').value||'');
   var travel=(document.getElementById('lf-t')&&document.getElementById('lf-t').value||'');
   var saleDate=(document.getElementById('lf-sd')&&document.getElementById('lf-sd').value||'');
@@ -2207,11 +2573,11 @@ function saveLead(existId){
     var idx=leads.findIndex(function(l){return l.id===existId;});
     if(idx>=0){
       var old=leads[idx];
-      leads[idx]=Object.assign({},old,{name:name,whatsapp:wa,email:email,destination:dest,travelDate:travel,saleDate:saleDate||old.saleDate||null,entryDate:entryDateOverride||old.entryDate,paxCount:pax,budget:budget,gmv:gmv,storeId:storeId,consultantId:consultantId,stage:stage,nextFollowup:followup||null,notes:notes,source:source,products:products,embarqueDate:emb||old.embarqueDate,returnDate:ret||old.returnDate});
+      leads[idx]=Object.assign({},old,{name:name,whatsapp:wa,email:email,cpf:cpf||old.cpf||'',birthDate:birthDate||old.birthDate||'',destination:dest,travelDate:travel,saleDate:saleDate||old.saleDate||null,entryDate:entryDateOverride||old.entryDate,paxCount:pax,budget:budget,gmv:gmv,storeId:storeId,consultantId:consultantId,stage:stage,nextFollowup:followup||null,notes:notes,source:source,products:products,embarqueDate:emb||old.embarqueDate,returnDate:ret||old.returnDate});
       if(stage==='fechado'&&!old.closed){leads[idx].closed=true;leads[idx].closedDate=saleDate||today();leads[idx].saleDate=saleDate||today();leads[idx].commission=Math.round(gmv*0.09*0.08);}
     }
   } else {
-    leads.push({id:genId(),name:name,whatsapp:wa,email:email,destination:dest,travelDate:travel,saleDate:saleDate||null,paxCount:pax,budget:budget,gmv:gmv,storeId:storeId,consultantId:consultantId,stage:stage,entryDate:entryDateOverride||today(),entryDateTime:nowISO(),lastContact:today(),nextFollowup:followup||null,notes:notes,source:source,products:products,embarqueDate:emb||null,returnDate:ret||null,closed:stage==='fechado',closedDate:stage==='fechado'?(saleDate||today()):null,commission:stage==='fechado'?Math.round(gmv*0.09*0.08):0,lost:false,nps:null,pvTaskCreated:false});
+    leads.push({id:genId(),name:name,whatsapp:wa,email:email,cpf:cpf||'',birthDate:birthDate||'',destination:dest,travelDate:travel,saleDate:saleDate||null,paxCount:pax,budget:budget,gmv:gmv,storeId:storeId,consultantId:consultantId,stage:stage,entryDate:entryDateOverride||today(),entryDateTime:nowISO(),lastContact:today(),nextFollowup:followup||null,notes:notes,source:source,products:products,embarqueDate:emb||null,returnDate:ret||null,closed:stage==='fechado',closedDate:stage==='fechado'?(saleDate||today()):null,commission:stage==='fechado'?Math.round(gmv*0.09*0.08):0,lost:false,nps:null,pvTaskCreated:false,mondeSynced:false,mondeId:null,mondeTaskId:null,mondeSyncedAt:null});
   }
   saveLeads(leads);closeModal();
   showToast(existId?'Lead atualizado!':'Novo lead cadastrado!','success');
@@ -3343,6 +3709,25 @@ function renderSettings(){
   h+='<button class="btn btn-ghost btn-sm" id="set-test-email">📤 Enviar e-mail de teste</button>';
   h+='</div></div>';
 
+  // Monde Configuration
+  var mondeCfg=getMondeConfig();
+  var mondeOk=!!(mondeCfg.login&&mondeCfg.password);
+  h+='<div class="card" style="margin-top:14px;">';
+  h+='<div class="card-title">🌍 Monde — Integração de Clientes</div>';
+  if(mondeOk){
+    h+='<div class="alert ok" style="margin-bottom:12px;"><div class="alert-ico">✅</div><div>Monde configurado! Use o botão <strong>"Cadastrar no Monde →"</strong> em qualquer venda fechada.</div></div>';
+  } else {
+    h+='<div class="alert info" style="margin-bottom:12px;"><div class="alert-ico">💡</div><div>Informe o login e senha do seu usuário admin no Monde. Credenciais ficam salvas <strong>apenas neste dispositivo</strong>.</div></div>';
+  }
+  h+='<div class="frow frow-2" style="margin-bottom:10px;">';
+  h+='<div class="fg"><label class="flbl">Login (e-mail do Monde)</label><input type="email" id="mn-login" class="finput" value="'+(mondeCfg.login||'')+'" placeholder="admin@suaagencia.monde.com.br"/></div>';
+  h+='<div class="fg"><label class="flbl">Senha do Monde</label><input type="password" id="mn-pass" class="finput" value="'+(mondeCfg.password||'')+'" placeholder="••••••••"/></div>';
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;">';
+  h+='<button class="btn btn-primary btn-sm" id="set-save-monde">💾 Salvar credenciais</button>';
+  if(mondeOk)h+='<button class="btn btn-ghost btn-sm" id="set-test-monde">🔄 Atualizar mapeamento</button>';
+  h+='</div></div>';
+
   var pc=document.getElementById('page-content');
   if(pc){
     pc.innerHTML=h;
@@ -3351,6 +3736,8 @@ function renderSettings(){
     var resetBtn=document.getElementById('set-reset');
     var saveEmailBtn=document.getElementById('set-save-email');
     var testEmailBtn=document.getElementById('set-test-email');
+    var saveMondeBtn=document.getElementById('set-save-monde');
+    var testMondeBtn=document.getElementById('set-test-monde');
     if(expLeads)expLeads.addEventListener('click',exportLeads);
     if(expNPS)expNPS.addEventListener('click',exportNPS);
     if(resetBtn)resetBtn.addEventListener('click',resetData);
@@ -3372,6 +3759,39 @@ function renderSettings(){
       sendEmailJS(S.user.email,S.user.name,'Teste de configuração — CVM Vendas','123456')
         .then(function(){testEmailBtn.disabled=false;testEmailBtn.textContent='📤 Enviar e-mail de teste';showToast('✅ E-mail de teste enviado para '+S.user.email,'success');})
         .catch(function(err){testEmailBtn.disabled=false;testEmailBtn.textContent='📤 Enviar e-mail de teste';showToast('Erro: '+(err.message||'falha no envio'),'error');});
+    });
+    if(saveMondeBtn)saveMondeBtn.addEventListener('click',function(){
+      var l=document.getElementById('mn-login');
+      var p=document.getElementById('mn-pass');
+      if(!l||!p||!l.value.trim()||!p.value.trim()){showToast('Preencha login e senha.','error');return;}
+      var cfg={login:l.value.trim(),password:p.value.trim()};
+      saveMondeConfig(cfg);
+      _mondeToken=null;_mondeTokenExpiry=0;_mondeMap={companies:{},categories:{},users:{}};
+      saveMondeBtn.disabled=true;saveMondeBtn.textContent='🔌 Testando e mapeando...';
+      mondeAuth().then(function(token){
+        return mondeFetchMap(token);
+      }).then(function(map){
+        saveMondeBtn.disabled=false;saveMondeBtn.textContent='💾 Salvar credenciais';
+        var comp=Object.keys(map.companies).length;
+        var cat=Object.keys(map.categories).length;
+        var usr=Object.keys(map.users).length;
+        showToast('✅ Monde conectado! '+comp+' lojas, '+cat+' categorias, '+usr+' consultores mapeados.','success');
+        renderSettings();
+      }).catch(function(err){
+        saveMondeBtn.disabled=false;saveMondeBtn.textContent='💾 Salvar credenciais';
+        showToast('Erro: '+(err.message||'verifique login e senha'),'error');
+      });
+    });
+    if(testMondeBtn)testMondeBtn.addEventListener('click',function(){
+      testMondeBtn.disabled=true;testMondeBtn.textContent='Atualizando...';
+      _mondeToken=null;_mondeTokenExpiry=0;_mondeMap={companies:{},categories:{},users:{}};
+      mondeAuth().then(function(token){return mondeFetchMap(token);})
+        .then(function(map){
+          testMondeBtn.disabled=false;testMondeBtn.textContent='🔄 Atualizar mapeamento';
+          showToast('✅ Mapeamento atualizado! '+Object.keys(map.companies).length+' lojas, '+Object.keys(map.users).length+' consultores.','success');
+          renderSettings();
+        })
+        .catch(function(err){testMondeBtn.disabled=false;testMondeBtn.textContent='🔄 Atualizar mapeamento';showToast('Erro: '+(err.message||'falha'),'error');});
     });
   }
 }
@@ -3459,6 +3879,9 @@ function init(){
     var logs=results[3]||[];
     var goals=results[4];
     var activities=results[5]||[];
+
+    // Load Monde config from Supabase
+    supaGetConfig('monde_config').then(function(mc){if(mc&&mc.login)DB.mondeConfig=mc;}).catch(function(){});
 
     // Merge DEFAULT_USERS emails/names into loaded users (keeps passwords set by users, updates emails/names)
     var mergedUsers=DEFAULT_USERS.map(function(def){
