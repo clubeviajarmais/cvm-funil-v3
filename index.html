@@ -124,6 +124,8 @@ tr:hover td{background:#F5F8FF;}
 .frow{display:grid;gap:12px;margin-bottom:14px;}
 .frow-2{grid-template-columns:1fr 1fr;}
 .frow-3{grid-template-columns:1fr 1fr 1fr;}
+.frow-4{grid-template-columns:1fr 1fr 1fr 1fr;}
+.goal-money-input{text-align:right;font-family:'DM Mono',monospace;font-weight:700;}
 .fg{display:flex;flex-direction:column;gap:5px;}
 .flbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
 .flbl .req{color:var(--red);}
@@ -353,11 +355,16 @@ tr:hover td{background:#F5F8FF;}
   </aside>
   <main id="main-content">
     <div class="topbar">
-      <div style="display:flex;align-items:center;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
         <button class="hamburger" id="hamburger-btn">☰</button>
         <div class="topbar-title" id="topbar-title">Dashboard</div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:4px;background:var(--bg);border-radius:9px;padding:4px 8px;border:1.5px solid var(--border);">
+          <button id="month-prev" style="border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--muted);padding:0 4px;">‹</button>
+          <span id="month-label" style="font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:var(--navy);min-width:64px;text-align:center;"></span>
+          <button id="month-next" style="border:none;background:transparent;cursor:pointer;font-size:14px;color:var(--muted);padding:0 4px;">›</button>
+        </div>
         <button class="btn btn-primary btn-sm hidden" id="topbar-add">+ Novo Lead</button>
         <span id="topbar-date" style="font-size:11px;color:var(--muted);"></span>
       </div>
@@ -463,15 +470,60 @@ var SAMPLE_TASKS = [];
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 
-var S = {user:null,view:'dashboard',store:'',dragId:null,lossReason:'',npsVal:null};
-var _otp = null; // {user, code, expires, attempts}
+var S = {user:null,view:'dashboard',store:'',dragId:null,lossReason:'',npsVal:null,month:new Date().toISOString().substring(0,7)};
+var _otp = null;
+
+// ── MONTH HELPER ──────────────────────────────────────────────────────────────
+function currentMonthStr(){return S.month;}
+function filterByMonth(lead){
+  var d=(lead.saleDate||lead.closedDate||'');
+  return d.substring(0,7)===S.month;
+}
+function isClosed(lead){return lead.stage==='fechado'||lead.stage==='posvenda';}
+function closedThisMonth(leads){return leads.filter(function(l){return isClosed(l)&&filterByMonth(l);});}
+function monthLabel(ym){
+  if(!ym)return '';
+  var parts=ym.split('-');
+  var months=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return months[parseInt(parts[1])-1]+'/'+parts[0];
+}
+function prevMonth(ym){
+  var d=new Date(ym+'-01T00:00:00');
+  d.setMonth(d.getMonth()-1);
+  return d.toISOString().substring(0,7);
+}
+function nextMonth(ym){
+  var d=new Date(ym+'-01T00:00:00');
+  d.setMonth(d.getMonth()+1);
+  return d.toISOString().substring(0,7);
+}
+// Goal for a store in a given month
+function storeMonthGoal(storeId,ym){
+  var goals=getGoals();
+  var sg=goals.stores&&goals.stores[storeId];
+  if(!sg)return 0;
+  var m=parseInt((ym||S.month).split('-')[1]);
+  if(sg.months&&sg.months[m])return sg.months[m];
+  // fallback to monthly * seasonality
+  var seasonal=(sg.seasonality&&sg.seasonality[m])||1;
+  return Math.round((sg.monthly||0)*seasonal);
+}
+// Sum consultant goals for a month
+function consultantMonthGoal(userId,ym){
+  var goals=getGoals();
+  var cg=goals.consultants&&goals.consultants[userId];
+  if(!cg)return 0;
+  var m=parseInt((ym||S.month).split('-')[1]);
+  if(cg.months&&cg.months[m])return cg.months[m];
+  return cg.gmv||0;
+}
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
 var SUPA_URL='https://chbrdzzpypvwfpqonfqs.supabase.co';
 var SUPA_KEY='sb_publishable_cG7kdMSBRAnADtwQdqTHWw_eF8mZ0ij';
 
 // In-memory DB — loaded from Supabase on startup, written back on every save
-var DB={users:null,leads:null,tasks:null,goals:null,logs:null};
+var DB={users:null,leads:null,tasks:null,goals:null,logs:null,activities:null};
 
 // ── STORAGE (localStorage apenas para sessão) ──────────────────────────────────
 function gls(k){try{var v=localStorage.getItem('cvm3_'+k);return v?JSON.parse(v):null;}catch(e){return null;}}
@@ -523,6 +575,7 @@ function getLeads(){return DB.leads||[];}
 function getGoals(){return DB.goals||DEFAULT_GOALS;}
 function getTasks(){return DB.tasks||[];}
 function getLogs(){return DB.logs||[];}
+function getActivities(){return DB.activities||[];}
 
 function saveUsers(v){
   DB.users=v;
@@ -544,6 +597,10 @@ function saveLogs(v){
   DB.logs=v;
   supaUpsertAll('cvm_logs',v.slice(0,200)).catch(function(e){console.error('saveLogs:',e);});
 }
+function saveActivities(v){
+  DB.activities=v;
+  supaUpsertAll('cvm_activities',v).catch(function(e){console.error('saveActivities:',e);});
+}
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 
@@ -558,7 +615,8 @@ function colorPct(p){return p>=100?'var(--green)':p>=75?'var(--teal)':p>=50?'var
 function cleanWA(n){return (n||'').replace(/\D/g,'');}
 function fmtWA(n){var c=cleanWA(n);if(c.length===11)return '('+c.slice(0,2)+') '+c.slice(2,7)+'-'+c.slice(7);if(c.length===10)return '('+c.slice(0,2)+') '+c.slice(2,6)+'-'+c.slice(6);return n;}
 function validWA(n){var c=cleanWA(n);return c.length===10||c.length===11;}
-function checkDup(wa,excId){var c=cleanWA(wa);return getLeads().find(function(l){return l.id!==excId&&cleanWA(l.whatsapp||'')===c&&!l.lost;});}
+function checkDup(wa,excId){var c=cleanWA(wa);return getLeads().find(function(l){return l.id!==excId&&cleanWA(l.whatsapp||'')=== c&&!l.lost;});}
+function findAllByWA(wa,excId){var c=cleanWA(wa);return getLeads().filter(function(l){return l.id!==excId&&cleanWA(l.whatsapp||'')=== c;});}
 function getUserById(id){return getUsers().find(function(u){return u.id===id;});}
 function getStoreById(id){return getStores().find(function(s){return s.id===id;});}
 function getStageById(id){return STAGES.find(function(s){return s.id===id;});}
@@ -600,7 +658,198 @@ function avHtml(u,sz){
   return '<div class="u-avatar" style="background:'+u.color+';width:'+sz+'px;height:'+sz+'px;font-size:'+(sz<30?9:11)+'px;">'+u.avatar+'</div>';
 }
 
-// ── AUDIT LOG ─────────────────────────────────────────────────────────────────
+// ── POINTS & CONQUISTAS ENGINE ────────────────────────────────────────────────
+
+var ACTIVITY_POINTS={
+  'whatsapp':5,'presencial':8,'ligacao':10,'reativacao':12,'instagram':6,'outros':4,
+  'followup':3,'venda':50,'seguro':20,'chip':12,'transfer':10,'passeio':8,
+  'nps10':25,'nps9':15,'venda100k':100,'venda200k':250
+};
+
+var CONQUISTAS_DEF=[
+  // Bronze — Nível 1
+  {id:'primeiros_passos',nivel:1,icon:'🌱',label:'Primeiros Passos',desc:'Cadastrou o 1º lead',check:function(data){return data.totalLeads>=1;}},
+  {id:'semana_ativa',nivel:1,icon:'📅',label:'Semana Ativa',desc:'5 dias com registro',check:function(data){return data.activeDaysStreak>=5;}},
+  {id:'primeira_venda',nivel:1,icon:'🎯',label:'Primeira Venda',desc:'Fechou a 1ª venda',check:function(data){return data.totalVendas>=1;}},
+  // Prata — Nível 2
+  {id:'centuriao',nivel:2,icon:'📞',label:'Centurião',desc:'300 leads em um mês',check:function(data){return data.leadsNoMes>=300;}},
+  {id:'guardiao',nivel:2,icon:'🛡️',label:'Guardião',desc:'100% de seguro na semana',check:function(data){return data.seguroSemana>=100;}},
+  {id:'meta_batida',nivel:2,icon:'📈',label:'Meta Batida',desc:'Bateu a meta mensal',check:function(data){return data.pctMeta>=100;}},
+  {id:'semana_perfeita',nivel:2,icon:'🔥',label:'Semana Perfeita',desc:'4 origens de lead na semana',check:function(data){return data.origensNaSemana>=4;}},
+  {id:'diversificado',nivel:2,icon:'💫',label:'Diversificado',desc:'5 origens diferentes no mês',check:function(data){return data.origensNoMes>=5;}},
+  // Ouro — Nível 3
+  {id:'foguete',nivel:3,icon:'🚀',label:'Foguete',desc:'100 leads em uma semana',check:function(data){return data.leadsNaSemana>=100;}},
+  {id:'ticket_ouro',nivel:3,icon:'💰',label:'Ticket de Ouro',desc:'Venda acima de R$100k',check:function(data){return data.maiorVenda>=100000;}},
+  {id:'em_serie',nivel:3,icon:'📈',label:'Em Série',desc:'3 meses seguidos de meta',check:function(data){return data.mesesMeta>=3;}},
+  {id:'escudo_aco',nivel:3,icon:'🛡️🛡️',label:'Escudo de Aço',desc:'90%+ seguro no mês inteiro',check:function(data){return data.seguroMes>=90;}},
+  {id:'inabalavel',nivel:3,icon:'💎',label:'Inabalável',desc:'15 dias úteis com registro diário',check:function(data){return data.activeDaysStreak>=15;}},
+  // Diamante — Nível 4
+  {id:'lenda_cvm',nivel:4,icon:'🏆',label:'Lenda CVM',desc:'12 meses consecutivos de meta',check:function(data){return data.mesesMeta>=12;}},
+  {id:'maquina',nivel:4,icon:'💎',label:'Máquina',desc:'22 dias úteis com registro',check:function(data){return data.activeDaysStreak>=22;}},
+  {id:'mega_venda',nivel:4,icon:'💎',label:'Mega Venda',desc:'Venda acima de R$200k',check:function(data){return data.maiorVenda>=200000;}},
+  {id:'protetor_lendario',nivel:4,icon:'🛡️🛡️🛡️',label:'Protetor Lendário',desc:'3 meses com 90%+ seguro',check:function(data){return data.mesesSeguro>=3;}},
+  {id:'rei_do_mes',nivel:3,icon:'👑',label:'Rei do Mês',desc:'Maior GMV do mês',check:function(data){return data.isReiDoMes===true;}}
+];
+
+var NIVEL_LABEL={1:'Bronze',2:'Prata',3:'Ouro',4:'Diamante'};
+var NIVEL_COLOR={1:'#cd7f32',2:'#9e9e9e',3:'#ffc107',4:'#00bcd4'};
+
+function calcUserData(userId,allLeads,allActivities,goals,ym){
+  var ym2=ym||S.month;
+  var myLeads=allLeads.filter(function(l){return l.consultantId===userId;});
+  var myClosedMonth=myLeads.filter(function(l){return isClosed(l)&&(l.saleDate||l.closedDate||'').substring(0,7)===ym2;});
+  var myLeadsMonth=myLeads.filter(function(l){return (l.entryDate||'').substring(0,7)===ym2;});
+  var myActs=allActivities.filter(function(a){return a.consultantId===userId&&(a.date||'').substring(0,7)===ym2;});
+
+  // Active days this month
+  var activeDays={};
+  myActs.forEach(function(a){if(a.date)activeDays[a.date]=1;});
+  myLeadsMonth.forEach(function(l){if(l.entryDate)activeDays[l.entryDate]=1;});
+
+  // Streak (consecutive days with activity from most recent)
+  var allDays=Object.keys(activeDays).sort();
+  var streak=0;
+  if(allDays.length){
+    streak=1;
+    for(var i=allDays.length-1;i>0;i--){
+      var d1=new Date(allDays[i]+'T00:00:00');
+      var d2=new Date(allDays[i-1]+'T00:00:00');
+      var diff=(d1-d2)/86400000;
+      if(diff===1)streak++;else break;
+    }
+  }
+
+  // Origins this month
+  var origins={};
+  myLeadsMonth.forEach(function(l){if(l.source)origins[l.source]=1;});
+
+  // Origins this week
+  var weekStart=new Date();weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+  var originsWeek={};
+  myLeadsMonth.filter(function(l){return l.entryDate&&new Date(l.entryDate+'T00:00:00')>=weekStart;}).forEach(function(l){if(l.source)originsWeek[l.source]=1;});
+
+  // Leads this week
+  var leadsWeek=myLeads.filter(function(l){return l.entryDate&&new Date(l.entryDate+'T00:00:00')>=weekStart;}).length;
+
+  // Seguro
+  var totalC=myClosedMonth.length||1;
+  var withSeguro=myClosedMonth.filter(function(l){return (l.products||[]).indexOf('Seguro Viagem')>=0;}).length;
+  var seguroMesPct=Math.round(withSeguro/totalC*100);
+
+  // Maior venda
+  var maiorVenda=myClosedMonth.reduce(function(a,l){return Math.max(a,l.gmv||0);},0);
+
+  // GMV month
+  var gmvMes=myClosedMonth.reduce(function(a,l){return a+(l.gmv||0);},0);
+  var metaMes=consultantMonthGoal(userId,ym2);
+  var pctMeta=metaMes>0?Math.round(gmvMes/metaMes*100):0;
+
+  // Points
+  var pts=0;
+  // Points from activities
+  myActs.forEach(function(a){pts+=(ACTIVITY_POINTS[a.type]||0);});
+  // Points from leads
+  myLeadsMonth.forEach(function(l){
+    var srcPts={'WhatsApp Ativo':5,'Presencial na Loja':8,'Instagram':6,'Indicação':6,'Reativação Base':12,'Grupo de Ofertas':5,'Site / Link Bio':5,'Outro':4};
+    pts+=(srcPts[l.source]||5);
+    // Anti-fraud: lote penalty - leads lançados em lote no mesmo dia (5+ no mesmo dia = metade dos pontos)
+    // (penalidade aplicada na seção de alertas, não aqui)
+  });
+  // Points from sales
+  myClosedMonth.forEach(function(l){
+    pts+=50; // venda
+    if((l.products||[]).indexOf('Seguro Viagem')>=0)pts+=20;
+    if((l.products||[]).indexOf('Chip Internacional')>=0)pts+=12;
+    if((l.products||[]).indexOf('Transfer In/Out')>=0)pts+=10;
+    if((l.products||[]).indexOf('Passeios Extras')>=0)pts+=8;
+    if((l.gmv||0)>=200000)pts+=250;
+    else if((l.gmv||0)>=100000)pts+=100;
+  });
+  // NPS points
+  myLeads.filter(function(l){return l.nps!==null&&(l.npsDate||'').substring(0,7)===ym2;}).forEach(function(l){
+    if(l.nps>=10)pts+=25;else if(l.nps>=9)pts+=15;else if(l.nps>=7)pts+=10;
+  });
+  // Multiplier: active every day this month
+  if(Object.keys(activeDays).length>=20)pts=Math.round(pts*2);// bateu meta de dias
+  else if(Object.keys(activeDays).length>=15)pts=Math.round(pts*1.5);
+
+  // Anti-fraud alerts
+  var alerts=[];
+  var byDay={};
+  myLeadsMonth.forEach(function(l){if(l.entryDate){byDay[l.entryDate]=(byDay[l.entryDate]||0)+1;}});
+  var maxInDay=Math.max.apply(null,Object.keys(byDay).map(function(k){return byDay[k];}).concat([0]));
+  if(myLeadsMonth.length>0&&maxInDay/myLeadsMonth.length>0.5&&maxInDay>=5){
+    alerts.push({type:'warn',msg:'Lançamento em lote: '+maxInDay+' leads no mesmo dia ('+Math.round(maxInDay/myLeadsMonth.length*100)+'% do mês)'});
+    pts=Math.round(pts*0.7); // 30% penalty
+  }
+  if(myClosedMonth.length>=5&&myClosedMonth.length/Math.max(myLeadsMonth.length,1)>0.75){
+    alerts.push({type:'danger',msg:'Conversão acima de 75% com '+myLeadsMonth.length+' leads — padrão incomum'});
+  }
+  var sameDay=myClosedMonth.filter(function(l){return l.entryDate&&(l.saleDate||l.closedDate)===l.entryDate;}).length;
+  if(sameDay>0)alerts.push({type:'warn',msg:sameDay+' venda(s) fechada(s) no mesmo dia da entrada do lead'});
+
+  return {
+    userId:userId,pts:pts,gmvMes:gmvMes,metaMes:metaMes,pctMeta:pctMeta,
+    totalLeads:myLeads.length,leadsNoMes:myLeadsMonth.length,leadsNaSemana:leadsWeek,
+    totalVendas:myClosedMonth.length,maiorVenda:maiorVenda,
+    activeDaysStreak:streak,activeDaysCount:Object.keys(activeDays).length,
+    origensNoMes:Object.keys(origins).length,origensNaSemana:Object.keys(originsWeek).length,
+    seguroMes:seguroMesPct,seguroSemana:seguroMesPct,
+    mesesMeta:0,mesesSeguro:0,isReiDoMes:false, // computed externally
+    alerts:alerts,byDay:byDay
+  };
+}
+
+function calcConquistas(data){
+  return CONQUISTAS_DEF.filter(function(c){
+    try{return c.check(data);}catch(e){return false;}
+  });
+}
+
+function nivelFromConquistas(conquistas){
+  if(!conquistas.length)return 0;
+  return Math.max.apply(null,conquistas.map(function(c){return c.nivel;}));
+}
+
+// Register an activity (called when consultant logs a contact/action)
+function registerActivity(type,meta){
+  var acts=getActivities();
+  var act={id:genId(),consultantId:S.user.id,type:type,date:today(),timestamp:nowISO(),meta:meta||'',storeId:S.user.stores[0]||''};
+  acts.push(act);
+  saveActivities(acts);
+  return act;
+}
+
+// ── NUMERIC / CURRENCY HELPERS ────────────────────────────────────────────────
+function parseRawVal(el){
+  if(!el)return 0;
+  var raw=el.getAttribute('data-raw');
+  if(raw!==null&&raw!=='')return parseFloat(raw)||0;
+  return parseFloat((el.value||'').replace(/\./g,'').replace(',','.'))||0;
+}
+function applyCurrencyMask(el){
+  if(!el||el._masked)return;
+  el._masked=true;
+  function fmt(){
+    var raw=el.value.replace(/\D/g,'');
+    if(!raw){el.setAttribute('data-raw','0');return;}
+    var num=parseInt(raw,10);
+    el.setAttribute('data-raw',String(num));
+    el.value=num.toLocaleString('pt-BR');
+  }
+  el.addEventListener('input',fmt);
+  el.addEventListener('focus',function(){this.select();});
+  // Format initial value
+  var init=parseFloat(el.value)||0;
+  if(init>0){
+    el.setAttribute('data-raw',String(Math.round(init)));
+    el.value=Math.round(init).toLocaleString('pt-BR');
+  }
+}
+function maskGoalInputs(){
+  // Apply mask to all goal inputs currently in DOM
+  document.querySelectorAll('.goal-money-input').forEach(function(el){applyCurrencyMask(el);});
+}
 
 function logEvent(action,extra){
   var logs=getLogs();
@@ -747,6 +996,19 @@ function initApp(){
     sel.addEventListener('change',function(){S.store=this.value;navigate(S.view);});
   }
   document.getElementById('topbar-date').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'long'});
+  // Month selector
+  function updateMonthLabel(){
+    var el=document.getElementById('month-label');
+    if(el)el.textContent=monthLabel(S.month);
+  }
+  updateMonthLabel();
+  var prevBtn=document.getElementById('month-prev');
+  var nextBtn=document.getElementById('month-next');
+  if(prevBtn)prevBtn.addEventListener('click',function(){S.month=prevMonth(S.month);updateMonthLabel();navigate(S.view);});
+  if(nextBtn)nextBtn.addEventListener('click',function(){
+    var nm=nextMonth(S.month);
+    if(nm<=new Date().toISOString().substring(0,7)){S.month=nm;updateMonthLabel();navigate(S.view);}
+  });
   var logoutBtn=document.getElementById('logout-btn');
   var hamBtn=document.getElementById('hamburger-btn');
   var topAdd=document.getElementById('topbar-add');
@@ -845,7 +1107,7 @@ function visLeads(all){
 
 function renderDashboard(){
   var leads=visLeads();
-  var closed=leads.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+  var closed=leads.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(filterByMonth(l));});
   var active=leads.filter(function(l){return !l.lost&&l.stage!=='fechado'&&l.stage!=='posvenda';});
   var totalGMV=closed.reduce(function(a,l){return a+(l.gmv||0);},0);
   var pipeline=active.reduce(function(a,l){return a+(l.budget||0);},0);
@@ -856,41 +1118,117 @@ function renderDashboard(){
   var insur=calcUpsell(closed).find(function(u){return u.product==='Seguro Viagem';})||{pct:0};
   var npsAvg=avgNPS(pvLeads);
   var goals=getGoals();
-  var storeGoal=S.store?(goals.stores[S.store]&&goals.stores[S.store].monthly||0):Object.keys(goals.stores).reduce(function(a,k){return a+(goals.stores[k].monthly||0);},0);
+  var storeGoal=S.store?storeMonthGoal(S.store,S.month):getStores().reduce(function(a,s){return a+storeMonthGoal(s.id,S.month);},0);
   var pctGoal=storeGoal>0?Math.round(totalGMV/storeGoal*100):0;
-  var allUsers=getUsers().filter(function(u){return u.role!=='admin';});
+  // Previous month comparison
+  var prevM=prevMonth(S.month);
+  var closedPrev=visLeads().filter(function(l){return isClosed(l)&&(l.saleDate||l.closedDate||'').substring(0,7)===prevM;});
+  var totalGMVPrev=closedPrev.reduce(function(a,l){return a+(l.gmv||0);},0);
+  var gmvDelta=totalGMVPrev>0?Math.round((totalGMV-totalGMVPrev)/totalGMVPrev*100):0;
+  var allUsers=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  var allActs=getActivities();
+  // Calculate data for all users
   var rankData=allUsers.map(function(u){
-    var ul=leads.filter(function(l){return l.consultantId===u.id;});
-    var cl=ul.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
-    var pts=ul.reduce(function(a,l){var map={novo:5,contato:10,proposta:20,negociacao:30,pagamento:40,fechado:100,posvenda:100};return a+(map[l.stage]||5)+Math.floor((l.gmv||0)/10000)*10;},0);
-    return {user:u,pts:pts,cnt:cl.length,gmv:cl.reduce(function(a,l){return a+(l.gmv||0);},0),nps:avgNPS(leads.filter(function(l){return l.consultantId===u.id;}))};
+    var d=calcUserData(u.id,leads,allActs,goals,S.month);
+    d.user=u;
+    return d;
   }).sort(function(a,b){return b.pts-a.pts;});
+  // Mark rei do mes
+  if(rankData.length>0)rankData[0].isReiDoMes=true;
   var medals=['🥇','🥈','🥉'];
   var trendHtml=pctGoal>=100?'<span class="trend-up">'+pctGoal+'% da meta ✅</span>':'<span class="trend-down">'+pctGoal+'% da meta</span>';
   var h='';
   h+='<div class="page-header">';
-  h+='<div><div class="page-title">📊 Dashboard</div><div class="page-sub">'+new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})+'</div></div>';
+  h+='<div><div class="page-title">📊 Dashboard</div><div class="page-sub">'+monthLabel(S.month)+'</div></div>';
   h+='<button class="btn btn-primary btn-sm" id="dash-kanban-btn">Abrir Kanban →</button></div>';
+
+  // Personal consultant panel — shown only for consultant/posvenda role
+  if(S.user.role==='consultant'||S.user.role==='posvenda'){
+    var myData=rankData.find(function(r){return r.user&&r.user.id===S.user.id;})||calcUserData(S.user.id,leads,allActs,goals,S.month);
+    var myConquistas=calcConquistas(myData);
+    var myNivel=nivelFromConquistas(myConquistas);
+    var myColor=NIVEL_COLOR[myNivel]||'var(--muted)';
+    var myPos=(rankData.findIndex(function(r){return r.user&&r.user.id===S.user.id;}))+1;
+    // Next level conquistas to unlock
+    var nextToUnlock=CONQUISTAS_DEF.filter(function(c){
+      if(myConquistas.find(function(x){return x.id===c.id;}))return false;
+      try{return !c.check(myData);}catch(e){return true;}
+    }).slice(0,3);
+    h+='<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;">';
+    h+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">';
+    h+=avHtml(S.user,44);
+    h+='<div style="flex:1;">';
+    h+='<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#fff;">'+S.user.name+'</div>';
+    if(myNivel>0){h+='<div style="margin-top:4px;"><span style="background:'+myColor+'44;color:'+myColor+';border:1px solid '+myColor+'88;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;">'+NIVEL_LABEL[myNivel]+'</span></div>';}
+    h+='</div>';
+    h+='<div style="text-align:right;">';
+    h+='<div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:var(--mint);">'+myData.pts+'</div>';
+    h+='<div style="font-size:11px;color:rgba(255,255,255,.5);">pontos · '+( myPos>0?'#'+myPos+' no ranking':'—')+'</div>';
+    h+='</div></div>';
+    // Progress bar meta
+    h+='<div style="margin-bottom:10px;">';
+    h+='<div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px;">';
+    h+='<span>Meta '+monthLabel(S.month)+': '+fmtM(myData.gmvMes)+' / '+fmtM(myData.metaMes)+'</span>';
+    h+='<span style="font-weight:800;color:'+(myData.pctMeta>=100?'var(--mint)':'rgba(255,255,255,.8)')+';">'+myData.pctMeta+'%</span>';
+    h+='</div>';
+    h+='<div style="height:8px;background:rgba(255,255,255,.15);border-radius:20px;overflow:hidden;">';
+    h+='<div style="width:'+Math.min(myData.pctMeta,100)+'%;height:100%;background:'+(myData.pctMeta>=100?'var(--mint)':'#7dd3fc')+';border-radius:20px;"></div>';
+    h+='</div></div>';
+    // Conquistas
+    if(myConquistas.length){
+      h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+      myConquistas.forEach(function(c){
+        h+='<span title="'+c.label+': '+c.desc+'" style="font-size:18px;cursor:help;">'+c.icon+'</span>';
+      });
+      h+='</div>';
+    }
+    // Next challenges
+    if(nextToUnlock.length){
+      h+='<div style="border-top:1px solid rgba(255,255,255,.1);padding-top:10px;">';
+      h+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">🎯 Próximas conquistas</div>';
+      h+='<div style="display:flex;gap:8px;">';
+      nextToUnlock.forEach(function(c){
+        h+='<div style="flex:1;background:rgba(255,255,255,.07);border-radius:8px;padding:8px;text-align:center;">';
+        h+='<div style="font-size:20px;margin-bottom:3px;opacity:.7;">'+c.icon+'</div>';
+        h+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.7);">'+c.label+'</div>';
+        h+='<div style="font-size:9px;color:rgba(255,255,255,.4);">'+c.desc+'</div>';
+        h+='</div>';
+      });
+      h+='</div></div>';
+    }
+    h+='</div>';
+  }
+
   h+='<div class="grid-4">';
-  h+=kpi(' green','💰','GMV Fechado Abril',fmtM(totalGMV),'Meta: '+fmtM(storeGoal),trendHtml);
+  var gmvTrendHtml=gmvDelta>=0?'<span class="trend-up">▲'+gmvDelta+'% vs '+monthLabel(prevM)+'</span>':'<span class="trend-down">▼'+Math.abs(gmvDelta)+'% vs '+monthLabel(prevM)+'</span>';
+  h+=kpi(' green','💰','GMV — '+monthLabel(S.month),fmtM(totalGMV),'Meta: '+fmtM(storeGoal)+' · '+pctGoal+'%',trendHtml+' '+gmvTrendHtml);
   h+=kpi('','🔥','Pipeline Ativo',fmtM(pipeline),active.length+' leads em andamento','');
   h+=kpi(' orange'+(dueToday.length+overdue.length>0?' pulse':''),'⚠️','Follow-ups',dueToday.length+overdue.length,dueToday.length+' hoje · '+overdue.length+' atrasados','');
-  h+=kpi(' purple','🏆','Vendas Fechadas',closed.length,'Abril','');
+  h+=kpi(' purple','🏆','Vendas — '+monthLabel(S.month),closed.length,closed.length+' · prev: '+closedPrev.length,'');
   h+='</div><div class="grid-4">';
   h+=kpi(' red'+(stale.length>0?' pulse':''),'🚨','Leads Parados +2h',stale.length,stale.length>0?'Ação urgente!':'Tudo respondido ✓','');
   h+=kpi(' sky','✈️','Clientes em Viagem',pvLeads.length,'Pós-venda ativo','');
   h+=kpi(npsAvg!==null?(parseFloat(npsAvg)>=8?' green':' orange'):'','⭐','NPS Médio',npsAvg||'—',pvLeads.filter(function(l){return l.nps!==null;}).length+' avaliações','');
   h+=kpi(insur.pct>=60?' green':' orange','🛡️','Penetração Seguro',insur.pct+'%','Meta: 60%','');
   h+='</div><div class="grid-2">';
-  h+='<div class="card"><div class="card-title">🏆 Ranking — Abril</div>';
-  if(!rankData.length){h+='<div class="empty-state"><div class="empty-icon">👥</div></div>';}
+  h+='<div class="card"><div class="card-title">🏆 Ranking — '+monthLabel(S.month)+'</div>';
+  if(!rankData.length){h+='<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-text">Sem consultores</div></div>';}
   else{
     rankData.forEach(function(r,i){
+      var conquistas=calcConquistas(r);
+      var nivel=nivelFromConquistas(conquistas);
+      var nColor=NIVEL_COLOR[nivel]||'var(--muted)';
       h+='<div class="rank-item">';
       h+='<div class="rank-num" style="background:'+r.user.color+';color:#fff;">'+(medals[i]||i+1)+'</div>';
-      h+='<div class="rank-info"><div class="rank-name">'+r.user.name+'</div><div class="rank-sub">'+r.cnt+' vendas · '+fmtM(r.gmv)+'</div></div>';
-      if(r.nps!==null)h+=npsHtml(parseFloat(r.nps));
-      h+='<div><div class="rank-pts">'+r.pts+'</div><div style="font-size:10px;color:var(--muted);">pts</div></div>';
+      h+='<div class="rank-info">';
+      h+='<div class="rank-name">'+r.user.name;
+      if(nivel>0)h+='<span style="font-size:9px;background:'+nColor+'22;color:'+nColor+';border:1px solid '+nColor+'44;border-radius:10px;padding:1px 6px;margin-left:6px;font-weight:700;">'+NIVEL_LABEL[nivel]+'</span>';
+      h+='</div>';
+      h+='<div class="rank-sub">'+r.totalVendas+' vendas · '+fmtM(r.gmvMes);
+      if(conquistas.length)h+=' · '+conquistas.slice(0,3).map(function(c){return c.icon;}).join('');
+      h+='</div></div>';
+      if(r.alerts&&r.alerts.length)h+='<span title="'+r.alerts.map(function(a){return a.msg;}).join(' | ')+'" style="cursor:help;font-size:14px;">⚠️</span>';
+      h+='<div><div class="rank-pts" style="color:'+nColor+';">'+r.pts+'</div><div style="font-size:10px;color:var(--muted);">pts</div></div>';
       h+='</div>';
     });
   }
@@ -918,7 +1256,7 @@ function renderDashboard(){
     h+='<div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;">';
     myStores.forEach(function(s){
       var sl=leads.filter(function(l){return l.storeId===s.id;});
-      var sc=sl.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+      var sc=sl.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(filterByMonth(l));});
       var sg=sc.reduce(function(a,l){return a+(l.gmv||0);},0);
       var gm=(goals.stores[s.id]&&goals.stores[s.id].monthly)||0;
       var pct=gm>0?Math.round(sg/gm*100):0;
@@ -984,7 +1322,7 @@ function renderManager(){
   consultants.forEach(function(c){
     var cl=leads.filter(function(l){return l.consultantId===c.id&&!l.lost;});
     var activeC=cl.filter(function(l){return l.stage!=='fechado'&&l.stage!=='posvenda'&&l.stage!=='perdido';});
-    var closedC=cl.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var closedC=cl.filter(function(l){return (l.stage==='fechado'||l.stage==='posvenda')&&(filterByMonth(l));});
     var ovdC=cl.filter(function(l){return l.nextFollowup&&l.nextFollowup<today()&&l.stage!=='fechado';});
     var staleC=cl.filter(function(l){return isStaleNew(l);});
     var tasksC=getTasks().filter(function(t){return t.consultantId===c.id&&t.date===today();});
@@ -1007,10 +1345,111 @@ function renderManager(){
     h+='</div>';
     h+='<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:3px;"><span>Tarefas</span><span>'+doneC.length+'/'+tasksC.length+'</span></div>';
     h+='<div class="prog-track"><div class="prog-fill" style="width:'+taskPct+'%;background:'+colorPct(taskPct)+';"></div></div></div>';
+    h+='<button class="btn btn-ghost btn-sm cons-profile-btn" data-id="'+c.id+'" style="width:100%;margin-top:10px;">📊 Ver Perfil Completo</button>';
     h+='</div>';
   });
   h+='</div>';
-  document.getElementById('page-content').innerHTML=h;
+  var pc=document.getElementById('page-content');
+  if(pc){
+    pc.innerHTML=h;
+    pc.querySelectorAll('.cons-profile-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){openConsultantProfile(btn.getAttribute('data-id'));});
+    });
+  }
+}
+
+function openConsultantProfile(userId){
+  var user=getUserById(userId);
+  if(!user)return;
+  var leads=getLeads();
+  var allActs=getActivities();
+  var goals=getGoals();
+  var data=calcUserData(userId,leads,allActs,goals,S.month);
+  var conquistas=calcConquistas(data);
+  var nivel=nivelFromConquistas(conquistas);
+  var nColor=NIVEL_COLOR[nivel]||'var(--muted)';
+
+  // Activity pattern — leads by day this month
+  var byDay=data.byDay||{};
+  var maxDay=Math.max.apply(null,Object.values(byDay).concat([1]));
+  var daysInMonth=new Date(parseInt(S.month.split('-')[0]),parseInt(S.month.split('-')[1]),0).getDate();
+
+  // Last 30 activities
+  var recentActs=allActs.filter(function(a){return a.consultantId===userId;}).sort(function(a,b){return (b.timestamp||'').localeCompare(a.timestamp||'');}).slice(0,15);
+  var actLabels={whatsapp:'💬 WhatsApp',presencial:'🏪 Presencial',ligacao:'📞 Ligação',reativacao:'♻️ Reativação',instagram:'📸 Instagram'};
+
+  var h='';
+  // Header
+  h+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">';
+  h+=avHtml(user,52);
+  h+='<div style="flex:1;">';
+  h+='<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;">'+user.name+'</div>';
+  h+='<div style="font-size:12px;color:var(--muted);">'+ROLES[user.role]+' · '+getStores().filter(function(s){return user.stores&&user.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(' · ')+'</div>';
+  if(nivel>0)h+='<div style="margin-top:6px;"><span style="background:'+nColor+'22;color:'+nColor+';border:1px solid '+nColor+'55;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:800;">'+NIVEL_LABEL[nivel]+' · '+data.pts+' pts</span></div>';
+  h+='</div></div>';
+
+  // KPI row
+  h+='<div class="grid-4" style="margin-bottom:16px;">';
+  h+=kpi('','🏆','Vendas '+monthLabel(S.month),data.totalVendas,'','');
+  h+=kpi('','💰','GMV',fmtM(data.gmvMes),'meta: '+fmtM(data.metaMes),'');
+  h+=kpi(data.pctMeta>=100?' green':data.pctMeta>=75?' ':'  orange','📈','Meta',data.pctMeta+'%','','');
+  h+=kpi('','📅','Dias Ativos',data.activeDaysCount,'streak: '+data.activeDaysStreak+'d','');
+  h+='</div>';
+
+  // Conquistas
+  if(conquistas.length){
+    h+='<div class="sec-lbl" style="margin-bottom:8px;">🎖️ Conquistas ('+conquistas.length+')</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">';
+    conquistas.forEach(function(c){
+      h+='<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">';
+      h+='<span style="font-size:18px;">'+c.icon+'</span>';
+      h+='<div><div style="font-size:11px;font-weight:800;color:var(--navy);">'+c.label+'</div>';
+      h+='<div style="font-size:10px;color:var(--muted);">'+c.desc+'</div></div></div>';
+    });
+    h+='</div>';
+  }
+
+  // Activity chart — bars by day
+  h+='<div class="sec-lbl" style="margin-bottom:8px;">📊 Padrão de Lançamento — '+monthLabel(S.month)+'</div>';
+  h+='<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:16px;">';
+  h+='<div style="display:flex;align-items:flex-end;gap:3px;height:60px;">';
+  for(var d=1;d<=daysInMonth;d++){
+    var dateKey=S.month+'-'+(d<10?'0':'')+d;
+    var cnt=byDay[dateKey]||0;
+    var barH=maxDay>0?Math.max(3,Math.round(cnt/maxDay*56)):3;
+    var isToday=dateKey===today();
+        var barColor=cnt>0?(isToday?'var(--mint)':'var(--teal)'):'var(--border)';
+    h+='<div title="'+d+'/'+S.month.split('-')[1]+': '+cnt+' leads" style="flex:1;height:'+barH+'px;background:'+barColor+';border-radius:2px 2px 0 0;min-width:4px;"></div>';
+  }
+  h+='</div>';
+  h+='<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:4px;"><span>01</span><span>'+Math.ceil(daysInMonth/2)+'</span><span>'+daysInMonth+'</span></div>';
+  if(data.alerts&&data.alerts.length){
+    data.alerts.forEach(function(a){h+='<div class="alert '+a.type+'" style="padding:6px 10px;font-size:11px;margin-top:8px;"><div class="alert-ico">⚠️</div><div>'+a.msg+'</div></div>';});
+  }
+  h+='</div>';
+
+  // Recent activities
+  h+='<div class="sec-lbl" style="margin-bottom:8px;">⚡ Atividades Recentes</div>';
+  if(!recentActs.length){h+='<div style="font-size:12px;color:var(--muted);font-style:italic;">Nenhuma atividade registrada ainda.</div>';}
+  else{
+    h+='<div style="max-height:200px;overflow-y:auto;">';
+    recentActs.forEach(function(a){
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">';
+      h+='<span style="font-size:14px;">'+(actLabels[a.type]||a.type)+'</span>';
+      h+='<div style="flex:1;font-size:11px;color:var(--muted);">'+(a.meta||'—')+'</div>';
+      h+='<div style="font-size:10px;color:var(--muted);">'+fmtDate(a.date)+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  openModal('📊 Perfil — '+user.name,h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var closeBtn=document.createElement('button');closeBtn.className='btn btn-ghost';closeBtn.textContent='Fechar';closeBtn.addEventListener('click',closeModal);
+    footer.appendChild(closeBtn);
+  }
 }
 
 // ── KANBAN ────────────────────────────────────────────────────────────────────
@@ -1421,11 +1860,37 @@ function openLeadForm(lead,stagePreset){
 function checkWAField(){
   var wa=document.getElementById('lf-w')&&document.getElementById('lf-w').value||'';
   var m=document.getElementById('lf-w-m');if(!m)return;
-  if(!wa){m.className='';m.textContent='';return;}
+  if(!wa){m.className='';m.innerHTML='';return;}
   if(!validWA(wa)){m.className='ferr';m.textContent='Número inválido';return;}
-  var dup=checkDup(wa,'');
-  if(dup){m.className='fwarn';m.textContent='⚠️ Já existe: '+dup.name;}
-  else{m.className='fok';m.textContent='✓ Válido';}
+  var all=findAllByWA(wa,'');
+  if(!all.length){m.className='fok';m.textContent='✓ Número livre';return;}
+  var active=all.filter(function(l){return !l.lost;});
+  var lost=all.filter(function(l){return l.lost;});
+  if(active.length>0){
+    var dup=active[0];
+    m.className='fwarn';
+    m.innerHTML='⚠️ Lead ativo: <strong>'+dup.name+'</strong> ('+( getStageById(dup.stage)&&getStageById(dup.stage).label||dup.stage)+') — <a href="#" id="wa-view-dup" style="color:var(--teal);">ver lead</a>';
+    var vl=document.getElementById('wa-view-dup');
+    if(vl)vl.addEventListener('click',function(e){e.preventDefault();closeModal();openLeadForm(dup);});
+    return;
+  }
+  if(lost.length>0){
+    var old=lost[lost.length-1];
+    var dsl=daysSince(old.lostDate||'');
+    m.className='';
+    m.innerHTML='<div style="background:rgba(2,128,144,.07);border:1.5px solid rgba(2,128,144,.25);border-radius:9px;padding:10px 12px;margin-top:6px;">'
+      +'<div style="font-size:11px;font-weight:800;color:var(--teal);margin-bottom:6px;">♻️ Cliente encontrado no histórico!</div>'
+      +'<div style="font-size:12px;color:var(--navy);">'+old.name+'</div>'
+      +'<div style="font-size:11px;color:var(--muted);">Perdido há '+dsl+'d · '+(old.destination||'—')+(old.lostReason?' · '+old.lostReason.split(' — ')[0]:'')+'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:8px;">'
+      +'<button type="button" id="wa-react-btn" class="btn btn-primary btn-sm" style="flex:1;">♻️ Reativar com histórico</button>'
+      +'<button type="button" id="wa-new-btn" class="btn btn-ghost btn-sm" style="flex:1;">+ Criar novo</button>'
+      +'</div></div>';
+    var rb=document.getElementById('wa-react-btn');
+    var nb=document.getElementById('wa-new-btn');
+    if(rb)rb.addEventListener('click',function(){reactivateLead(old.id);closeModal();});
+    if(nb)nb.addEventListener('click',function(){m.className='fok';m.innerHTML='✓ Criando como novo (histórico mantido)';});
+  }
 }
 
 function saveLead(existId){
@@ -1549,7 +2014,7 @@ function filterLeads(){
 function renderTasks(){
   var u=S.user;
   var allTasks=getTasks();
-  if(u.role==='consultant')allTasks=allTasks.filter(function(t){return t.consultantId===u.id;});
+  if(u.role==='consultant'||u.role==='posvenda')allTasks=allTasks.filter(function(t){return t.consultantId===u.id;});
   var tod=today();
   var todayTasks=allTasks.filter(function(t){return t.date===tod;});
   var overdueTasks=allTasks.filter(function(t){return t.date<tod&&!t.completed;});
@@ -1560,9 +2025,30 @@ function renderTasks(){
   var pvDue=visLeads().filter(function(l){return l.stage==='posvenda'&&l.returnDate&&daysSince(l.returnDate)>=3&&l.nps===null;});
   var typeColors={followup:'pill-blue',call:'pill-teal',reactivation:'pill-orange',admin:'pill-gray',posvenda:'pill-sky'};
   var typeLabels={followup:'Follow-up',call:'Ligação',reactivation:'Reativação',admin:'Admin',posvenda:'Pós-Venda'};
+  var myActs=getActivities().filter(function(a){return a.consultantId===u.id&&a.date===tod;});
+  var actCounts={whatsapp:0,presencial:0,ligacao:0,reativacao:0,instagram:0};
+  myActs.forEach(function(a){if(actCounts[a.type]!==undefined)actCounts[a.type]++;});
   var h='';
   h+='<div class="page-header"><div><div class="page-title">✅ Tarefas do Dia</div><div class="page-sub">'+done+'/'+tot+' concluídas</div></div>';
   h+='<button class="btn btn-primary btn-sm" id="task-add-btn">+ Nova Tarefa</button></div>';
+  h+='<div class="card" style="margin-bottom:16px;border-top:3px solid var(--mint);">';
+  h+='<div class="card-title">📊 Registrar Atividade de Hoje</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Registre cada contato. Alimenta seu ranking e conquistas automaticamente.</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  var actBtns=[
+    {type:'whatsapp',icon:'💬',label:'WhatsApp',cnt:actCounts.whatsapp},
+    {type:'presencial',icon:'🏪',label:'Presencial',cnt:actCounts.presencial},
+    {type:'ligacao',icon:'📞',label:'Ligação',cnt:actCounts.ligacao},
+    {type:'reativacao',icon:'♻️',label:'Reativação',cnt:actCounts.reativacao},
+    {type:'instagram',icon:'📸',label:'Instagram',cnt:actCounts.instagram}
+  ];
+  actBtns.forEach(function(b){
+    h+='<button class="act-reg-btn" data-type="'+b.type+'" style="display:flex;align-items:center;gap:7px;padding:8px 14px;background:var(--bg);border:2px solid var(--border);border-radius:10px;cursor:pointer;font-family:DM Sans,sans-serif;font-size:12px;font-weight:700;">';
+    h+='<span style="font-size:16px;">'+b.icon+'</span><span>'+b.label+'</span>';
+    if(b.cnt>0)h+='<span class="act-badge" style="background:var(--teal);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;">'+b.cnt+'</span>';
+    h+='</button>';
+  });
+  h+='</div></div>';
   h+='<div class="grid-4">';
   h+=kpi(' green','✅','Concluídas',done,'de '+tot+' hoje','');
   h+=kpi(' orange','🔔','Follow-ups',fuLeads.length,'','');
@@ -1584,21 +2070,16 @@ function renderTasks(){
   if(overdueTasks.length){
     h+='<div style="margin-top:12px;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:8px;">⚠️ Atrasadas</div>';
     overdueTasks.forEach(function(t){
-      h+='<div class="task-item">';
-      h+='<div class="task-check task-toggle" data-id="'+t.id+'"></div>';
+      h+='<div class="task-item"><div class="task-check task-toggle" data-id="'+t.id+'"></div>';
       h+='<div style="flex:1;"><div class="task-title">'+t.title+'</div><div class="task-meta">'+fmtDate(t.date)+'</div></div></div>';
     });
   }
-  h+='</div>';
-  h+='<div>';
+  h+='</div><div>';
   if(fuLeads.length){
     h+='<div class="card" style="margin-bottom:14px;"><div class="card-title">🔔 Follow-ups para Hoje ('+fuLeads.length+')</div>';
     fuLeads.forEach(function(l){
-      var waNum=cleanWA(l.whatsapp||'');
-      h+='<div class="task-item">';
-      h+='<div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">'+(l.destination||'—')+' · '+fmtM(l.budget||0)+'</div></div>';
-      h+='<a class="btn btn-primary btn-sm" href="https://wa.me/55'+waNum+'" target="_blank">💬</a>';
-      h+='</div>';
+      h+='<div class="task-item"><div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">'+(l.destination||'—')+' · '+fmtM(l.budget||0)+'</div></div>';
+      h+='<a class="btn btn-primary btn-sm" href="https://wa.me/55'+cleanWA(l.whatsapp||'')+'" target="_blank">💬</a></div>';
     });
     h+='</div>';
   }
@@ -1606,10 +2087,8 @@ function renderTasks(){
     h+='<div class="card" style="margin-bottom:14px;border-top:3px solid var(--sky);">';
     h+='<div class="card-title" style="color:var(--sky);">✈️ Pós-Venda Urgente</div>';
     pvDue.forEach(function(l){
-      h+='<div class="task-item">';
-      h+='<div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">Retornou há '+daysSince(l.returnDate)+'d · '+(l.destination||'—')+'</div></div>';
-      h+='<button class="btn btn-sky btn-sm pv-nps-tsk" data-id="'+l.id+'">⭐ NPS</button>';
-      h+='</div>';
+      h+='<div class="task-item"><div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">Retornou há '+daysSince(l.returnDate)+'d · '+(l.destination||'—')+'</div></div>';
+      h+='<button class="btn btn-sky btn-sm pv-nps-tsk" data-id="'+l.id+'">⭐ NPS</button></div>';
     });
     h+='</div>';
   }
@@ -1617,14 +2096,22 @@ function renderTasks(){
   var pc=document.getElementById('page-content');
   if(pc){
     pc.innerHTML=h;
-    var taskAddBtn=document.getElementById('task-add-btn');
-    if(taskAddBtn)taskAddBtn.addEventListener('click',addTaskForm);
+    var btn=document.getElementById('task-add-btn');if(btn)btn.addEventListener('click',addTaskForm);
     pc.querySelectorAll('.task-toggle').forEach(function(el){el.addEventListener('click',function(){toggleTask(el.getAttribute('data-id'));});});
-    pc.querySelectorAll('.task-lead-btn').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-lid')));});});
-    pc.querySelectorAll('.pv-nps-tsk').forEach(function(btn){btn.addEventListener('click',function(){openNPSModal(btn.getAttribute('data-id'));});});
+    pc.querySelectorAll('.task-lead-btn').forEach(function(b){b.addEventListener('click',function(){openLeadForm(leadById(b.getAttribute('data-lid')));});});
+    pc.querySelectorAll('.pv-nps-tsk').forEach(function(b){b.addEventListener('click',function(){openNPSModal(b.getAttribute('data-id'));});});
+    pc.querySelectorAll('.act-reg-btn').forEach(function(b){
+      b.addEventListener('click',function(){
+        var type=b.getAttribute('data-type');
+        registerActivity(type,'');
+        var badge=b.querySelector('.act-badge');
+        if(badge){badge.textContent=parseInt(badge.textContent||'0')+1;}
+        else{var nb=document.createElement('span');nb.className='act-badge';nb.style.cssText='background:var(--teal);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;';nb.textContent='1';b.appendChild(nb);}
+        showToast('Atividade registrada! +pts','success');
+      });
+    });
   }
 }
-
 function toggleTask(id){var t=getTasks();var i=t.findIndex(function(x){return x.id===id;});if(i<0)return;t[i].completed=!t[i].completed;saveTasks(t);renderTasks();}
 
 function addTaskForm(){
@@ -1682,40 +2169,35 @@ function renderGoals(){
 }
 
 function buildGoalsStores(){
-  var goals=getGoals();var leads=visLeads();var month=new Date().getMonth()+1;
+  var leads=visLeads();
   var stores=getStores().filter(function(s){return S.user.role==='admin'||S.user.stores.indexOf(s.id)>=0;});
   var h='<div class="grid-3">';
   stores.forEach(function(s){
-    var sg=goals.stores[s.id]||{monthly:0,quarterly:0,annual:0};
-    var seasonal=(sg.seasonality&&sg.seasonality[month])||1;
-    var adj=Math.round(sg.monthly*seasonal);
-    var closed=leads.filter(function(l){return l.storeId===s.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var adj=storeMonthGoal(s.id,S.month);
+    var closed=leads.filter(function(l){return l.storeId===s.id&&isClosed(l)&&filterByMonth(l);});
     var gmv=closed.reduce(function(a,l){return a+(l.gmv||0);},0);
     var pct=adj>0?Math.round(gmv/adj*100):0;
-    var npsV=avgNPS(leads.filter(function(l){return l.storeId===s.id;}));
+    var goals=getGoals();var sg=goals.stores&&goals.stores[s.id]||{};
+    var annual=0;
+    if(sg.months){for(var m=1;m<=12;m++)annual+=(sg.months[m]||0);}
+    else annual=sg.annual||0;
     h+='<div class="card" style="border-top:4px solid '+s.color+';">';
-    h+='<div class="card-title"><span style="color:'+s.color+';">'+s.short+'</span> '+s.name;
-    if(npsV)h+=npsHtml(parseFloat(npsV));
-    h+='</div>';
+    h+='<div class="card-title"><span style="color:'+s.color+';">'+s.short+'</span> '+s.name+'</div>';
     h+='<div class="grid-2" style="margin-bottom:12px;">';
-    h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:10px;"><div style="font-size:10px;color:var(--muted);font-weight:700;">Realizado</div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+fmtM(gmv)+'</div></div>';
-    h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:10px;"><div style="font-size:10px;color:var(--muted);font-weight:700;">Meta Ajustada</div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+fmtM(adj)+'</div></div>';
+    h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:10px;"><div style="font-size:10px;color:var(--muted);font-weight:700;">Realizado '+monthLabel(S.month)+'</div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+fmtM(gmv)+'</div></div>';
+    h+='<div style="text-align:center;background:var(--bg);border-radius:8px;padding:10px;"><div style="font-size:10px;color:var(--muted);font-weight:700;">Meta do Mês</div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+fmtM(adj)+'</div></div>';
     h+='</div>';
     h+='<div class="prog-track" style="height:10px;"><div class="prog-fill" style="width:'+Math.min(pct,100)+'%;background:'+s.color+';"></div></div>';
     h+='<div style="text-align:right;font-size:14px;font-weight:800;margin-top:5px;color:'+colorPct(pct)+';">'+pct+'%</div>';
     h+='<div class="divider"></div>';
-    h+='<div style="display:flex;gap:10px;">';
-    h+='<div style="flex:1;text-align:center;"><div style="font-size:9px;color:var(--muted);font-weight:700;">Trimestral</div><div style="font-size:12px;font-weight:700;">'+fmtM(sg.quarterly||0)+'</div></div>';
-    h+='<div style="flex:1;text-align:center;"><div style="font-size:9px;color:var(--muted);font-weight:700;">Anual</div><div style="font-size:12px;font-weight:700;">'+fmtM(sg.annual||0)+'</div></div>';
-    h+='</div>';
-    h+='<div style="margin-top:8px;font-size:11px;color:var(--muted);">Sazonalidade Abr: <strong>'+Math.round(seasonal*100)+'%</strong></div>';
+    h+='<div style="text-align:center;"><div style="font-size:9px;color:var(--muted);font-weight:700;">Meta Anual (soma dos 12 meses)</div><div style="font-size:13px;font-weight:700;">'+fmtM(annual)+'</div></div>';
     h+='</div>';
   });
   return h+'</div>';
 }
 
 function buildGoalsCons(){
-  var goals=getGoals();var leads=visLeads();var u=S.user;
+  var leads=visLeads();var u=S.user;var allActs=getActivities();var goals=getGoals();
   var cons=getUsers().filter(function(c){
     if(u.role==='consultant')return c.id===u.id;
     if(u.role==='manager')return u.stores.some(function(s){return c.stores&&c.stores.indexOf(s)>=0;});
@@ -1724,9 +2206,13 @@ function buildGoalsCons(){
   var h='<div class="grid-3">';
   cons.forEach(function(c){
     var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:0,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30};
-    var cl=leads.filter(function(l){return l.consultantId===c.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(l.saleDate||l.closedDate||'').substring(0,7)===(new Date().toISOString().substring(0,7));});
-    var realGmv=cl.reduce(function(a,l){return a+(l.gmv||0);},0);
-    var pct=cg.gmv>0?Math.round(realGmv/cg.gmv*100):0;
+    var data=calcUserData(c.id,leads,allActs,goals,S.month);
+    var cl=leads.filter(function(l){return l.consultantId===c.id&&isClosed(l)&&filterByMonth(l);});
+    var metaMes=consultantMonthGoal(c.id,S.month);
+    var pct=metaMes>0?Math.round(data.gmvMes/metaMes*100):0;
+    var conquistas=calcConquistas(data);
+    var nivel=nivelFromConquistas(conquistas);
+    var nColor=NIVEL_COLOR[nivel]||'var(--muted)';
     var stores=getStores().filter(function(s){return c.stores&&c.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(' · ');
     var upsells=[
       {prod:'Seguro Viagem',icon:'🛡️',meta:cg.metaSeguro||60},
@@ -1735,9 +2221,16 @@ function buildGoalsCons(){
       {prod:'Passeios Extras',icon:'🎡',meta:cg.metaPasseios||30}
     ];
     h+='<div class="card" style="border-left:4px solid '+c.color+';">';
-    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'+avHtml(c,36);
-    h+='<div style="flex:1;"><div style="font-weight:800;font-size:14px;">'+c.name+'</div><div style="font-size:11px;color:var(--muted);">'+stores+'</div></div></div>';
-    h+=progRow('GMV '+new Date().toLocaleDateString('pt-BR',{month:'short',year:'numeric'}),realGmv,cg.gmv,c.color);
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'+avHtml(c,36);
+    h+='<div style="flex:1;"><div style="font-weight:800;font-size:14px;">'+c.name;
+    if(nivel>0)h+='<span style="font-size:9px;background:'+nColor+'22;color:'+nColor+';border:1px solid '+nColor+'44;border-radius:10px;padding:1px 6px;margin-left:6px;font-weight:700;">'+NIVEL_LABEL[nivel]+'</span>';
+    h+='</div><div style="font-size:11px;color:var(--muted);">'+stores+'</div></div></div>';
+    if(conquistas.length){
+      h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">';
+      conquistas.slice(0,6).forEach(function(c2){h+='<span title="'+c2.label+': '+c2.desc+'" style="font-size:16px;cursor:help;">'+c2.icon+'</span>';});
+      h+='</div>';
+    }
+    h+=progRow('GMV '+monthLabel(S.month),data.gmvMes,metaMes,c.color);
     h+='<div style="margin-top:8px;">';
     upsells.forEach(function(ups){
       var cnt=cl.filter(function(l){return (l.products||[]).indexOf(ups.prod)>=0;}).length;
@@ -1751,6 +2244,13 @@ function buildGoalsCons(){
       h+='</div>';
     });
     h+='</div>';
+    if(data.alerts&&data.alerts.length){
+      h+='<div style="margin-top:8px;">';
+      data.alerts.forEach(function(a){
+        h+='<div class="alert '+a.type+'" style="padding:6px 10px;font-size:11px;"><div class="alert-ico">⚠️</div><div>'+a.msg+'</div></div>';
+      });
+      h+='</div>';
+    }
     h+='</div>';
   });
   return h+'</div>';
@@ -1759,34 +2259,56 @@ function buildGoalsCons(){
 function openGoalEditor(){
   var goals=getGoals();var stores=getStores();
   var cons=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  var MNAMES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var h='<div class="tab-bar" style="margin-bottom:16px;"><button class="tab-item active" id="ge-tab-s">Por Loja</button><button class="tab-item" id="ge-tab-c">Por Consultor</button></div>';
   h+='<div id="ge-section-s">';
+  h+='<div class="alert info" style="margin-bottom:12px;"><div class="alert-ico">💡</div><div>Cadastre a meta de cada mês. A meta anual é calculada automaticamente. <strong>Soma dos consultores deve ser igual à meta da loja.</strong></div></div>';
   stores.forEach(function(s){
     var sg=goals.stores&&goals.stores[s.id]||{};
-    h+='<div style="margin-bottom:14px;padding:14px;background:var(--bg);border-radius:10px;border-left:3px solid '+s.color+';">';
-    h+='<div style="font-weight:800;font-size:13px;margin-bottom:10px;">'+s.short+' — '+s.name+'</div>';
-    h+='<div class="frow frow-3">';
-    h+='<div class="fg"><label class="flbl">GMV Mensal (R$)</label><input type="number" id="ge-'+s.id+'-m" class="finput" value="'+(sg.monthly||0)+'"/></div>';
-    h+='<div class="fg"><label class="flbl">Trimestral (R$)</label><input type="number" id="ge-'+s.id+'-q" class="finput" value="'+(sg.quarterly||0)+'"/></div>';
-    h+='<div class="fg"><label class="flbl">Anual (R$)</label><input type="number" id="ge-'+s.id+'-a" class="finput" value="'+(sg.annual||0)+'"/></div>';
-    h+='</div></div>';
+    var months=sg.months||{};
+    // Calc consultant sum for this store for current month
+    var consSum=cons.filter(function(c){return c.stores&&c.stores.indexOf(s.id)>=0;}).reduce(function(a,c){
+      var cg=(goals.consultants&&goals.consultants[c.id])||{};
+      var m=parseInt(S.month.split('-')[1]);
+      return a+(cg.months&&cg.months[m]?cg.months[m]:(cg.gmv||0));
+    },0);
+    var storeAnnual=0;for(var m=1;m<=12;m++)storeAnnual+=(months[m]||sg.monthly||0);
+    h+='<div style="margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px;border-left:3px solid '+s.color+';">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">';
+    h+='<div style="font-weight:800;font-size:13px;">'+s.short+' — '+s.name+'</div>';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--teal);">Anual: <span id="ge-'+s.id+'-annual">'+ fmtM(storeAnnual)+'</span></div>';
+    h+='</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
+    for(var mi=1;mi<=12;mi++){
+      var val=months[mi]||sg.monthly||0;
+      h+='<div class="fg"><label class="flbl" style="font-size:9px;">'+MNAMES[mi-1]+'</label>';
+      h+='<input type="text" id="ge-'+s.id+'-m'+mi+'" class="finput goal-money-input" value="'+( val>0?Math.round(val).toLocaleString('pt-BR'):'')+'" placeholder="0" data-raw="'+Math.round(val)+'"/>';
+      h+='</div>';
+    }
+    h+='</div>';
+    h+='</div>';
   });
   h+='</div>';
   h+='<div id="ge-section-c" style="display:none;">';
   cons.forEach(function(c){
     var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:0,salesQty:0,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30};
+    var months=cg.months||{};
     h+='<div style="margin-bottom:14px;padding:14px;background:var(--bg);border-radius:10px;border-left:3px solid '+c.color+';">';
     h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+avHtml(c,26)+'<div style="font-weight:800;font-size:13px;">'+c.name+'</div></div>';
-    h+='<div class="frow frow-2" style="margin-bottom:8px;">';
-    h+='<div class="fg"><label class="flbl">Meta GMV Mensal (R$)</label><input type="number" id="gc-'+c.id+'-gmv" class="finput" value="'+(cg.gmv||0)+'"/></div>';
-    h+='<div class="fg"><label class="flbl">Meta Vendas/Mês (qtd)</label><input type="number" id="gc-'+c.id+'-qty" class="finput" value="'+(cg.salesQty||0)+'"/></div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">';
+    for(var mi=1;mi<=12;mi++){
+      var val=months[mi]||cg.gmv||0;
+      h+='<div class="fg"><label class="flbl" style="font-size:9px;">'+MNAMES[mi-1]+'</label>';
+      h+='<input type="text" id="gc-'+c.id+'-m'+mi+'" class="finput goal-money-input" value="'+( val>0?Math.round(val).toLocaleString('pt-BR'):'')+'" placeholder="0" data-raw="'+Math.round(val)+'"/>';
+      h+='</div>';
+    }
     h+='</div>';
-    h+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">🛡️ Metas de Upsell (%)</div>';
-    h+='<div class="frow frow-4" style="grid-template-columns:1fr 1fr 1fr 1fr;">';
-    h+='<div class="fg"><label class="flbl">Seguro</label><input type="number" id="gc-'+c.id+'-seg" class="finput" value="'+(cg.metaSeguro||60)+'" min="0" max="100"/></div>';
-    h+='<div class="fg"><label class="flbl">Chip</label><input type="number" id="gc-'+c.id+'-chp" class="finput" value="'+(cg.metaChip||50)+'" min="0" max="100"/></div>';
-    h+='<div class="fg"><label class="flbl">Transfer</label><input type="number" id="gc-'+c.id+'-trf" class="finput" value="'+(cg.metaTransfer||40)+'" min="0" max="100"/></div>';
-    h+='<div class="fg"><label class="flbl">Passeios</label><input type="number" id="gc-'+c.id+'-pas" class="finput" value="'+(cg.metaPasseios||30)+'" min="0" max="100"/></div>';
+    h+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">🛡️ Metas Upsell (%)</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
+    h+='<div class="fg"><label class="flbl">Seguro</label><input type="number" id="gc-'+c.id+'-seg" class="finput" value="'+( cg.metaSeguro||60)+'" min="0" max="100"/></div>';
+    h+='<div class="fg"><label class="flbl">Chip</label><input type="number" id="gc-'+c.id+'-chp" class="finput" value="'+( cg.metaChip||50)+'" min="0" max="100"/></div>';
+    h+='<div class="fg"><label class="flbl">Transfer</label><input type="number" id="gc-'+c.id+'-trf" class="finput" value="'+( cg.metaTransfer||40)+'" min="0" max="100"/></div>';
+    h+='<div class="fg"><label class="flbl">Passeios</label><input type="number" id="gc-'+c.id+'-pas" class="finput" value="'+( cg.metaPasseios||30)+'" min="0" max="100"/></div>';
     h+='</div>';
     h+='</div>';
   });
@@ -1801,41 +2323,67 @@ function openGoalEditor(){
   }
   var tabS=document.getElementById('ge-tab-s');var tabC=document.getElementById('ge-tab-c');
   var secS=document.getElementById('ge-section-s');var secC=document.getElementById('ge-section-c');
-  if(tabS)tabS.addEventListener('click',function(){tabS.classList.add('active');tabC.classList.remove('active');secS.style.display='';secC.style.display='none';});
-  if(tabC)tabC.addEventListener('click',function(){tabC.classList.add('active');tabS.classList.remove('active');secS.style.display='none';secC.style.display='';});
+  if(tabS)tabS.addEventListener('click',function(){tabS.classList.add('active');tabC.classList.remove('active');secS.style.display='';secC.style.display='none';maskGoalInputs();});
+  if(tabC)tabC.addEventListener('click',function(){tabC.classList.add('active');tabS.classList.remove('active');secS.style.display='none';secC.style.display='';maskGoalInputs();});
+  // Apply mask immediately after render
+  setTimeout(function(){maskGoalInputs();},50);
 }
 
 function saveGoals2(){
   var goals=getGoals();var stores=getStores();if(!goals.stores)goals.stores={};
   stores.forEach(function(s){
-    if(!goals.stores[s.id])goals.stores[s.id]={seasonality:(DEFAULT_GOALS.stores[s.id]&&DEFAULT_GOALS.stores[s.id].seasonality)||{}};
-    var mEl=document.getElementById('ge-'+s.id+'-m');
-    var qEl=document.getElementById('ge-'+s.id+'-q');
-    var aEl=document.getElementById('ge-'+s.id+'-a');
-    if(mEl)goals.stores[s.id].monthly=parseFloat(mEl.value)||0;
-    if(qEl)goals.stores[s.id].quarterly=parseFloat(qEl.value)||0;
-    if(aEl)goals.stores[s.id].annual=parseFloat(aEl.value)||0;
+    if(!goals.stores[s.id])goals.stores[s.id]={};
+    var months={};var annual=0;
+    for(var mi=1;mi<=12;mi++){
+      var el=document.getElementById('ge-'+s.id+'-m'+mi);
+      var v=el?Math.round(parseRawVal(el)):0;
+      months[mi]=v;annual+=v;
+    }
+    goals.stores[s.id].months=months;
+    goals.stores[s.id].annual=annual;
+    goals.stores[s.id].monthly=Math.round(annual/12); // backward compat
   });
   if(!goals.consultants)goals.consultants={};
   var cons=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
   cons.forEach(function(c){
     if(!goals.consultants[c.id])goals.consultants[c.id]={};
-    var gmvEl=document.getElementById('gc-'+c.id+'-gmv');
-    var qtyEl=document.getElementById('gc-'+c.id+'-qty');
+    var months={};var annual=0;
+    for(var mi=1;mi<=12;mi++){
+      var el=document.getElementById('gc-'+c.id+'-m'+mi);
+      var v=el?Math.round(parseRawVal(el)):0;
+      months[mi]=v;annual+=v;
+    }
+    goals.consultants[c.id].months=months;
+    goals.consultants[c.id].gmv=Math.round(annual/12);
     var segEl=document.getElementById('gc-'+c.id+'-seg');
     var chpEl=document.getElementById('gc-'+c.id+'-chp');
     var trfEl=document.getElementById('gc-'+c.id+'-trf');
     var pasEl=document.getElementById('gc-'+c.id+'-pas');
-    if(gmvEl)goals.consultants[c.id].gmv=parseFloat(gmvEl.value)||0;
-    if(qtyEl)goals.consultants[c.id].salesQty=parseInt(qtyEl.value)||0;
     if(segEl)goals.consultants[c.id].metaSeguro=parseInt(segEl.value)||60;
     if(chpEl)goals.consultants[c.id].metaChip=parseInt(chpEl.value)||50;
     if(trfEl)goals.consultants[c.id].metaTransfer=parseInt(trfEl.value)||40;
     if(pasEl)goals.consultants[c.id].metaPasseios=parseInt(pasEl.value)||30;
   });
-  saveGoals(goals);closeModal();showToast('Metas salvas!','success');renderGoals();
+  // Validate: sum of consultants vs store goal
+  var warnings=[];
+  stores.forEach(function(s){
+    var curMonth=parseInt(S.month.split('-')[1]);
+    var storeMeta=goals.stores[s.id]&&goals.stores[s.id].months&&goals.stores[s.id].months[curMonth]||0;
+    var consTotal=cons.filter(function(c){return c.stores&&c.stores.indexOf(s.id)>=0;}).reduce(function(a,c){
+      return a+(goals.consultants[c.id]&&goals.consultants[c.id].months&&goals.consultants[c.id].months[curMonth]||0);
+    },0);
+    if(storeMeta>0&&consTotal>0&&Math.abs(consTotal-storeMeta)/storeMeta>0.05){
+      warnings.push(s.short+': loja='+fmtM(storeMeta)+' | consultores='+fmtM(consTotal)+' (dif. '+Math.round(Math.abs(consTotal-storeMeta)/storeMeta*100)+'%)');
+    }
+  });
+  saveGoals(goals);
+  if(warnings.length){
+    showToast('⚠️ Metas salvas — mas atenção: '+warnings.join('; '),'warn');
+  } else {
+    showToast('✅ Metas salvas e alinhadas!','success');
+  }
+  closeModal();renderGoals();
 }
-
 // ── COMMISSIONS ───────────────────────────────────────────────────────────────
 
 function renderCommissions(){
@@ -1846,7 +2394,7 @@ function renderCommissions(){
   h+='<div class="page-header"><div><div class="page-title">💰 Comissões — Abril 2026</div></div></div>';
   h+='<div class="grid-3">';
   cons.filter(function(c){return c.role!=='admin';}).forEach(function(c){
-    var cl=leads.filter(function(l){return l.consultantId===c.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(l.closedDate||'').startsWith('2026-04');});
+    var cl=leads.filter(function(l){return l.consultantId===c.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(filterByMonth(l));});
     var totalGmv=cl.reduce(function(a,l){return a+(l.gmv||0);},0);
     var receita=totalGmv*0.09;
     var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:100000};
@@ -2582,19 +3130,22 @@ function init(){
     supaGetAll('cvm_leads'),
     supaGetAll('cvm_tasks'),
     supaGetAll('cvm_logs'),
-    supaGetConfig('goals')
+    supaGetConfig('goals'),
+    supaGetAll('cvm_activities')
   ]).then(function(results){
     var users=results[0]||[];
     var leads=results[1]||[];
     var tasks=results[2]||[];
     var logs=results[3]||[];
     var goals=results[4];
+    var activities=results[5]||[];
 
     DB.users=users.length>0?users:DEFAULT_USERS;
     DB.leads=leads;
     DB.tasks=tasks;
     DB.logs=logs;
     DB.goals=goals||DEFAULT_GOALS;
+    DB.activities=activities;
 
     // Primeira vez: grava defaults no Supabase
     if(users.length===0){
