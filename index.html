@@ -928,7 +928,7 @@ var _mondeTokenExpiry=0;
 var _mondeQueue=[];
 var _mondeQueueRunning=false;
 var _mondeLastCall=0;
-var MONDE_MIN_INTERVAL=3000; // 3s entre chamadas — respeita rate limit Monde (10 req/min)
+var MONDE_MIN_INTERVAL=7000; // 7s entre chamadas — max 8.5 req/min, abaixo do limite de 10/min
 
 function mondeEnqueue(fn){
   return new Promise(function(resolve,reject){
@@ -1295,24 +1295,10 @@ function mondeCriarTarefa(lead,personId,token,map){
   if(catId){
     return enviarTarefa(catId);
   }
-  // Categoria não estava no mapa — busca agora (1 chamada)
-  return mondeFetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:hdrs})
-    .then(function(r){return r.ok?r.json():{data:[]};})
-    .then(function(d){
-      var catMap={};
-      (d.data||[]).forEach(function(c){
-        var nm=(c.attributes&&(c.attributes.name||c.attributes.title)||'').toLowerCase();
-        if(nm.indexOf('venda confirm')>=0)catMap.vendaConfirmada=c.id;
-        if(nm.indexOf('geral')>=0&&!catMap.geral)catMap.geral=c.id;
-      });
-      _mondeMap.categories=catMap;
-      supaSetConfig('monde_map',{map:_mondeMap,updatedAt:nowISO()}).catch(function(){});
-      return enviarTarefa(catMap.vendaConfirmada||catMap.geral||null);
-    })
-    .catch(function(){
-      // Se falhar a busca de categoria, tenta criar sem ela (Monde pode rejeitar)
-      return enviarTarefa(null);
-    });
+  // Categoria não carregada — bloqueia e informa. Não tenta criar sem categoria.
+  return Promise.reject(new Error(
+    'Categoria não configurada. Vá em ⚙️ Configurações → Monde → clique "Salvar credenciais" para carregar as categorias.'
+  ));
 }
 
 // ── CADASTRAR NO MONDE (fluxo completo com todas as correções) ────────────────
@@ -1326,6 +1312,24 @@ function cadastrarNoMonde(leadId,btn){
   var cfg=getMondeConfig();
   if(!cfg.login||!cfg.password){
     showToast('Configure as credenciais em ⚙️ Configurações → Monde.','error');
+    return;
+  }
+  // Verifica se categoria está pré-carregada (obrigatória no Monde)
+  // Se não estiver, exige ir nas Configurações primeiro
+  var hasCat=(_mondeMap.categories&&(_mondeMap.categories.vendaConfirmada||_mondeMap.categories.geral));
+  if(!hasCat){
+    // Tenta carregar do Supabase antes de reclamar
+    supaGetConfig('monde_map').then(function(cached){
+      if(cached&&cached.map&&(cached.map.categories&&(cached.map.categories.vendaConfirmada||cached.map.categories.geral))){
+        _mondeMap=cached.map;
+        // Chama novamente agora que tem o mapa
+        cadastrarNoMonde(leadId,btn);
+      } else {
+        showToast('⚠️ Categorias não carregadas. Vá em ⚙️ Configurações → Monde → "Salvar credenciais".','warn');
+      }
+    }).catch(function(){
+      showToast('⚠️ Categorias não carregadas. Vá em ⚙️ Configurações → Monde → "Salvar credenciais".','warn');
+    });
     return;
   }
   // PROTEÇÃO: se já tem mondeId, confirmar antes de recriar (evita pessoa duplicada)
