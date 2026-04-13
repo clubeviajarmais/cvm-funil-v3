@@ -982,36 +982,25 @@ function mondeAuth(){
 
 // ── BUSCAR MAPEAMENTOS DO MONDE (empresas, categorias, usuários) ──────────────
 function mondeFetchMap(token){
-  // Sequencial (não paralelo) para não estourar rate limit
-  // Só busca empresas e categorias — usuarios mapeados são opcionais
+  // Apenas task-categories — único endpoint documentado e funcional na API Monde
+  // /api/v2/companies não é endpoint público do Monde (retorna vazio)
   var headers={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
-  var compMap={};var catMap={};
-  return mondeFetch('https://web.monde.com.br/api/v2/companies?page[size]=50',{headers:headers})
+  return mondeFetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:headers})
     .then(function(r){return r.ok?r.json():{data:[]};})
     .then(function(d){
-      (d.data||[]).forEach(function(c){
-        var nm=(c.attributes&&c.attributes.name||'').toLowerCase();
-        if(nm.indexOf('boa vista')>=0)compMap.bv=c.id;
-        else if(nm.indexOf('shopping')>=0&&nm.indexOf('lagoas')>=0)compMap.sl=c.id;
-        else if(nm.indexOf('assa')>=0||nm.indexOf('minas')>=0)compMap.bh=c.id;
-      });
-      return mondeFetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:headers});
-    })
-    .then(function(r){return r.ok?r.json():{data:[]};})
-    .then(function(d){
+      var catMap={};
       (d.data||[]).forEach(function(c){
         var nm=(c.attributes&&(c.attributes.name||c.attributes.title)||'').toLowerCase();
         if(nm.indexOf('venda confirm')>=0)catMap.vendaConfirmada=c.id;
         if(nm.indexOf('geral')>=0&&!catMap.geral)catMap.geral=c.id;
       });
-      _mondeMap={companies:compMap,categories:catMap,users:{}};
+      _mondeMap={companies:{},categories:catMap,users:{}};
       supaSetConfig('monde_map',{map:_mondeMap,updatedAt:nowISO()}).catch(function(){});
       return _mondeMap;
     })
     .catch(function(e){
-      // Se rate limit no mapeamento, retorna mapa vazio e continua (não é crítico)
       console.error('mondeFetchMap erro:',e.message);
-      return {companies:{},categories:{},users:{}};
+      throw e;
     });
 }
 
@@ -1262,17 +1251,17 @@ function mondeCriarTarefa(lead,personId,token,map){
     +'\n\nCriado automaticamente pelo CVM Funil.';
 
   var cpfInfo=lead.cpf?(' | CPF: '+lead.cpf):'';
-  // Inclui CPF no título quando sem pessoa vinculada (para identificação no Monde)
+  // Inclui loja e CPF no título para identificação no Monde
+  var storeShort=store?(' ['+store.short+']'):'';
   var titleBase=personId
-    ?('Emitir Contrato — '+lead.name)
-    :('Emitir Contrato — '+lead.name+cpfInfo);
+    ?('Emitir Contrato'+storeShort+' — '+lead.name)
+    :('Emitir Contrato'+storeShort+' — '+lead.name+cpfInfo);
   // due-date não é suportado pela API do Monde
   var taskAttrs={title:titleBase,description:desc};
 
   var rels={};
   if(personId)rels.person={data:{type:'people',id:personId}};
-  var companyId=map&&map.companies&&map.companies[lead.storeId];
-  if(companyId)rels.company={data:{type:'companies',id:companyId}};
+  // company (/api/v2/companies) não é endpoint público — nome da loja vai no título
   var userId=map&&map.users&&consultant&&map.users[consultant.id];
   if(userId)rels.responsible={data:{type:'users',id:userId}};
 
@@ -4138,10 +4127,9 @@ function renderSettings(){
         return mondeFetchMap(token);
       }).then(function(map){
         saveMondeBtn.disabled=false;saveMondeBtn.textContent='💾 Salvar credenciais';
-        var comp=Object.keys(map.companies).length;
-        var cat=Object.keys(map.categories).length;
-        var usr=Object.keys(map.users).length;
-        showToast('✅ Monde conectado! '+comp+' lojas, '+cat+' categorias, '+usr+' consultores mapeados.','success');
+        var cat=Object.keys(map.categories||{}).length;
+        var catLabel=cat>0?cat+' categorias carregadas':'⚠️ Nenhuma categoria encontrada';
+        showToast('✅ Monde conectado! '+catLabel+'. Pronto para sincronizar.','success');
         renderSettings();
       }).catch(function(err){
         saveMondeBtn.disabled=false;saveMondeBtn.textContent='💾 Salvar credenciais';
