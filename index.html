@@ -1025,51 +1025,54 @@ function validarCPF(cpf){
 function mondeBuscarPessoa(lead,token){
   var headers={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
   var cpfClean=lead.cpf?(lead.cpf.replace(/\D/g,'')):'' ;
-  var cpfFmt=cpfClean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
   var waClean=cleanWA(lead.whatsapp||'');
 
+  function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+  function safeFetch(url){
+    return fetch(url,{headers:headers}).then(function(r){
+      if(r.status===429)return {data:[],_rateLimit:true};
+      return r.ok?r.json():{data:[]};
+    }).catch(function(){return {data:[]};});
+  }
+
   function matchesCpfOrPhone(p){
-    var attrs=p.attributes||{};
-    if(cpfClean&&(attrs.cpf||'').replace(/\D/g,'')===cpfClean)return true;
+    var a=p.attributes||{};
+    if(cpfClean&&(a.cpf||'').replace(/\D/g,'')===cpfClean)return true;
     if(waClean&&waClean.length>=8){
       var tail=waClean.slice(-8);
-      var mp=(attrs['mobile-phone']||'').replace(/\D/g,'');
-      var ph=(attrs.phone||'').replace(/\D/g,'');
+      var mp=(a['mobile-phone']||'').replace(/\D/g,'');
+      var ph=(a.phone||'').replace(/\D/g,'');
       if(mp.slice(-8)===tail||ph.slice(-8)===tail)return true;
     }
     return false;
   }
 
-  function scanPage(url){
-    return fetch(url,{headers:headers}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};});
+  // Sequencial com delay de 600ms entre chamadas para não estourar rate limit
+  var steps=[];
+  if(cpfClean) steps.push('https://web.monde.com.br/api/v2/people?filter[cpf]='+cpfClean+'&page[size]=10');
+  if(waClean)  steps.push('https://web.monde.com.br/api/v2/people?filter[mobile-phone]='+waClean+'&page[size]=10');
+
+  function runSteps(i){
+    if(i>=steps.length){
+      // Fallback: uma única página de varredura (100 registros, 1 chamada só)
+      return delay(700).then(function(){
+        return safeFetch('https://web.monde.com.br/api/v2/people?page[size]=100&page[number]=1');
+      }).then(function(d){
+        if(d._rateLimit)return null;
+        return (d.data||[]).find(matchesCpfOrPhone)||null;
+      });
+    }
+    return safeFetch(steps[i]).then(function(d){
+      if(d._rateLimit){return delay(2000).then(function(){return runSteps(i+1);});}
+      var found=(d.data||[]).find(matchesCpfOrPhone);
+      if(found)return found;
+      return delay(600).then(function(){return runSteps(i+1);});
+    });
   }
 
-  // Estratégia 1: filter[cpf] e filter[mobile-phone] em paralelo
-  var attempts=[];
-  if(cpfClean) attempts.push(scanPage('https://web.monde.com.br/api/v2/people?filter[cpf]='+cpfClean+'&page[size]=10'));
-  if(cpfFmt&&cpfFmt!==cpfClean) attempts.push(scanPage('https://web.monde.com.br/api/v2/people?filter[cpf]='+encodeURIComponent(cpfFmt)+'&page[size]=10'));
-  if(waClean) attempts.push(scanPage('https://web.monde.com.br/api/v2/people?filter[mobile-phone]='+waClean+'&page[size]=10'));
-  if(!attempts.length) return Promise.resolve(null);
-
-  return Promise.all(attempts).then(function(results){
-    for(var i=0;i<results.length;i++){
-      var found=(results[i].data||[]).find(matchesCpfOrPhone);
-      if(found)return found;
-    }
-    // Estratégia 2: varredura paginada até 400 registros com match client-side
-    function scanUntilFound(page){
-      if(page>4)return Promise.resolve(null);
-      return scanPage('https://web.monde.com.br/api/v2/people?page[size]=100&page[number]='+page)
-        .then(function(d){
-          var list=d.data||[];
-          var found=list.find(matchesCpfOrPhone);
-          if(found)return found;
-          if(list.length<100)return null; // última página
-          return scanUntilFound(page+1);
-        });
-    }
-    return scanUntilFound(1);
-  }).catch(function(){return null;});
+  if(!steps.length) return Promise.resolve(null);
+  return runSteps(0).catch(function(){return null;});
 }
 
 function mondeBuscarPorCPF(cpfClean,token){
@@ -1164,20 +1167,20 @@ function mondePedirIdManual(leadId,token,map){
 
   function doSearch(q){
     if(!q||q.length<2){res.innerHTML='';return;}
-    res.innerHTML='<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px;">\u{1F50D} Buscando no Monde...</div>';
-    // Busca paginada com filter[name] e q= em paralelo, filtra pelo nome digitado client-side
+    res.innerHTML='<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px;">🔍 Buscando no Monde...</div>';
     var qLow=q.toLowerCase();
-    Promise.all([
-      fetch('https://web.monde.com.br/api/v2/people?filter[name]='+encodeURIComponent(q)+'&page[size]=20',{headers:hdrs}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};}),
-      fetch('https://web.monde.com.br/api/v2/people?page[size]=100&page[number]=1',{headers:hdrs}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};})
-    ]).then(function(results){
-      var all={};
-      results.forEach(function(r){(r.data||[]).forEach(function(p){all[p.id]=p;});});
-      var combined=Object.values(all);
-      // Filtra client-side pelo nome digitado
-      var filtered=combined.filter(function(p){return (p.attributes&&p.attributes.name||'').toLowerCase().indexOf(qLow)>=0;});
-      renderRes(filtered.length>0?filtered:combined.slice(0,10));
-    }).catch(function(){res.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao conectar ao Monde.</div>';});
+    // Uma chamada só — evita rate limit
+    fetch('https://web.monde.com.br/api/v2/people?filter[name]='+encodeURIComponent(q)+'&page[size]=20',{headers:hdrs})
+      .then(function(r){
+        if(r.status===429){res.innerHTML='<div style="color:var(--orange);font-size:12px;padding:10px;text-align:center;">⏳ Muitas requisições. Aguarde alguns segundos e tente novamente.</div>';return {data:[]};}
+        return r.ok?r.json():{data:[]};
+      })
+      .then(function(d){
+        var list=d.data||[];
+        var filtered=list.filter(function(p){return (p.attributes&&p.attributes.name||'').toLowerCase().indexOf(qLow)>=0;});
+        renderRes(filtered.length>0?filtered:list);
+      })
+      .catch(function(){res.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao conectar ao Monde.</div>';});
   }
 
   if(inp){
