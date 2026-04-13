@@ -619,6 +619,9 @@ function supaUpsertAll(table,records){
     method:'POST',
     headers:Object.assign({},supaHdrs(),{'Prefer':'resolution=merge-duplicates,return=minimal'}),
     body:JSON.stringify(rows)
+  }).then(function(r){
+    if(!r.ok)return r.text().then(function(t){throw new Error('Supabase '+table+' ('+r.status+'): '+t);});
+    return r;
   });
 }
 function supaDeleteRow(table,id){
@@ -639,7 +642,7 @@ function supaSetConfig(key,data){
   });
 }
 
-// ── ACCESSORES (lê do DB em memória, escreve no DB + Supabase) ─────────────────
+// ── ACCESSORES (lê do DB em memória, escreve no DB + Supabase + localStorage backup) ──
 function getUsers(){return DB.users||DEFAULT_USERS;}
 function getStores(){return DEFAULT_STORES;}
 function getLeads(){return DB.leads||[];}
@@ -654,7 +657,15 @@ function saveUsers(v){
 }
 function saveLeads(v){
   DB.leads=v;
-  supaUpsertAll('cvm_leads',v).catch(function(e){console.error('saveLeads:',e);});
+  // Backup local imediato (garante que não sumam se Supabase falhar)
+  try{localStorage.setItem('cvm3_leads_bkp',JSON.stringify(v));}catch(e){}
+  supaUpsertAll('cvm_leads',v).then(function(){
+    // Limpa backup após salvar com sucesso
+    try{localStorage.removeItem('cvm3_leads_bkp');}catch(e){}
+  }).catch(function(e){
+    console.error('saveLeads Supabase falhou — backup local ativo:',e);
+    showToast('⚠️ Erro ao salvar no banco. Lead salvo localmente.','warn');
+  });
 }
 function saveTasks(v){
   DB.tasks=v;
@@ -3911,9 +3922,24 @@ function init(){
     DB.users=mergedUsers.length>0?mergedUsers:DEFAULT_USERS;
     // Always sync merged users to Supabase
     supaUpsertAll('cvm_users',DB.users).catch(function(e){console.error(e);});
-    if(!goals){
-      supaSetConfig('goals',DEFAULT_GOALS).catch(function(e){console.error(e);});
+
+    // Recover leads from localStorage backup if Supabase returned empty
+    var localBkp=null;
+    try{var b=localStorage.getItem('cvm3_leads_bkp');if(b)localBkp=JSON.parse(b);}catch(e){}
+    if(leads.length===0&&localBkp&&localBkp.length>0){
+      console.warn('Supabase leads vazio — recuperando '+localBkp.length+' leads do backup local');
+      DB.leads=localBkp;
+      supaUpsertAll('cvm_leads',localBkp).then(function(){
+        try{localStorage.removeItem('cvm3_leads_bkp');}catch(e){}
+      }).catch(function(e){console.error('Falha ao re-salvar backup:',e);});
+    } else {
+      DB.leads=leads;
     }
+
+    DB.tasks=tasks;
+    DB.logs=logs;
+    DB.goals=goals||DEFAULT_GOALS;
+    DB.activities=activities;
 
     if(ls)ls.style.display='none';
 
