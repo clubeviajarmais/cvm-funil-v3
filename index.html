@@ -919,17 +919,52 @@ function saveMondeConfig(cfg){
 }
 
 // Mapa de IDs do Monde (carregados na configuração inicial)
-// Estrutura: {companies:{bv:'uuid',sl:'uuid',bh:'uuid'}, categories:{vendaConfirmada:'uuid'}, users:{[cvm_user_id]:'monde_uuid'}}
 var _mondeMap={companies:{},categories:{},users:{}};
 var _mondeToken=null;
 var _mondeTokenExpiry=0;
+
+// ── FILA DE REQUISIÇÕES MONDE (evita rate limit com múltiplos consultores) ────
+// Garante execução sequencial com delay mínimo entre chamadas
+var _mondeQueue=[];
+var _mondeQueueRunning=false;
+var _mondeLastCall=0;
+var MONDE_MIN_INTERVAL=700; // ms mínimos entre chamadas
+
+function mondeEnqueue(fn){
+  return new Promise(function(resolve,reject){
+    _mondeQueue.push({fn:fn,resolve:resolve,reject:reject});
+    if(!_mondeQueueRunning)_mondeRunQueue();
+  });
+}
+
+function _mondeRunQueue(){
+  if(!_mondeQueue.length){_mondeQueueRunning=false;return;}
+  _mondeQueueRunning=true;
+  var item=_mondeQueue.shift();
+  var now=Date.now();
+  var wait=Math.max(0,MONDE_MIN_INTERVAL-(now-_mondeLastCall));
+  setTimeout(function(){
+    _mondeLastCall=Date.now();
+    item.fn().then(function(r){item.resolve(r);_mondeRunQueue();}).catch(function(e){item.reject(e);_mondeRunQueue();});
+  },wait);
+}
+
+// Wrapper: todas as chamadas HTTP ao Monde passam por aqui
+function mondeFetch(url,opts){
+  return mondeEnqueue(function(){
+    return fetch(url,opts).then(function(r){
+      if(r.status===429)return r.text().then(function(t){throw new Error('Limite de requisições Monde — aguarde 30s. ('+t+')');});
+      return r;
+    });
+  });
+}
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────
 function mondeAuth(){
   var cfg=getMondeConfig();
   if(!cfg.login||!cfg.password)return Promise.reject(new Error('Monde não configurado. Acesse ⚙️ Configurações → Monde.'));
   if(_mondeToken&&Date.now()<_mondeTokenExpiry-300000)return Promise.resolve(_mondeToken);
-  return fetch('https://web.monde.com.br/api/v2/tokens',{
+  return mondeFetch('https://web.monde.com.br/api/v2/tokens',{
     method:'POST',
     headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json'},
     body:JSON.stringify({data:{type:'tokens',attributes:{login:cfg.login,password:cfg.password}}})
@@ -949,9 +984,9 @@ function mondeAuth(){
 function mondeFetchMap(token){
   var headers={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
   return Promise.all([
-    fetch('https://web.monde.com.br/api/v2/companies?page[size]=50',{headers:headers}).then(function(r){return r.json();}),
-    fetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:headers}).then(function(r){return r.json();}),
-    fetch('https://web.monde.com.br/api/v2/users?page[size]=50',{headers:headers}).then(function(r){return r.json();}).catch(function(){return {data:[]};})
+    mondeFetch('https://web.monde.com.br/api/v2/companies?page[size]=50',{headers:headers}).then(function(r){return r.json();}),
+    mondeFetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:headers}).then(function(r){return r.json();}),
+    mondeFetch('https://web.monde.com.br/api/v2/users?page[size]=50',{headers:headers}).then(function(r){return r.json();}).catch(function(){return {data:[]};})
   ]).then(function(results){
     var companies=results[0].data||[];
     var categories=results[1].data||[];
@@ -1129,20 +1164,23 @@ function _criarTarefaEFinalizar(mondePersonId,leadId,lead,token,map,btn,leads,ex
 function mondePedirIdManual(leadId,token,map){
   var lead=getLeads().find(function(l){return l.id===leadId;});
   if(!lead)return;
-  var h='<div class="alert info" style="margin-bottom:14px;"><div class="alert-ico">\u{1F50D}</div><div>Digite o nome do cliente <strong>como está no Monde</strong> e selecione da lista.</div></div>';
-  h+='<div class="fg"><label class="flbl">Buscar no Monde</label><input type="text" id="monde-si" class="finput" placeholder="Ex: Rafael Oliveira" autocomplete="off"/></div>';
-  h+='<div id="monde-sr" style="margin-top:10px;max-height:240px;overflow-y:auto;"></div>';
-  openModal('\u{1F30D} Localizar cliente no Monde',h,'');
+  var h='<div class="alert info" style="margin-bottom:14px;"><div class="alert-ico">🔍</div><div>Carregando clientes do Monde… Digite para filtrar em tempo real.</div></div>';
+  h+='<div class="fg"><label class="flbl">Filtrar por nome, CPF ou telefone</label>';
+  h+='<input type="text" id="monde-si" class="finput" placeholder="Ex: Rafael Oliveira" autocomplete="off" disabled/></div>';
+  h+='<div id="monde-sr" style="margin-top:10px;max-height:280px;overflow-y:auto;"></div>';
+  openModal('🌍 Localizar cliente no Monde',h,'');
   var footer=document.getElementById('modal-footer');
   if(footer){footer.innerHTML='';var cb=document.createElement('button');cb.className='btn btn-ghost';cb.textContent='Cancelar';cb.addEventListener('click',closeModal);footer.appendChild(cb);}
   var inp=document.getElementById('monde-si');
   var res=document.getElementById('monde-sr');
-  var tim=null;
-  var hdrs={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
+  var _allPeople=[];
 
   function renderRes(list){
-    if(!list||!list.length){res.innerHTML='<div style="text-align:center;padding:14px;color:var(--muted);font-size:13px;">Nenhum resultado — tente outro nome</div>';return;}
-    var h2='';
+    if(!list||!list.length){
+      res.innerHTML='<div style="text-align:center;padding:14px;color:var(--muted);font-size:13px;">Nenhum resultado — tente outro termo</div>';
+      return;
+    }
+    var h2='<div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-weight:700;">'+list.length+' resultado(s)</div>';
     list.forEach(function(p){
       var a=p.attributes||{};
       var cpfShow=a.cpf?a.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):'—';
@@ -1159,36 +1197,47 @@ function mondePedirIdManual(leadId,token,map){
         var pid=el.getAttribute('data-id');
         var pname=el.querySelector('div').textContent;
         closeModal();
-        showToast('\u{1F517} Vinculando a '+pname+'...','info');
+        showToast('🔗 Vinculando a '+pname+'...','info');
         _criarTarefaEFinalizar(pid,leadId,lead,token,map||_mondeMap,null,getLeads(),true);
       });
     });
   }
 
-  function doSearch(q){
-    if(!q||q.length<2){res.innerHTML='';return;}
-    res.innerHTML='<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px;">🔍 Buscando no Monde...</div>';
-    var qLow=q.toLowerCase();
-    // Uma chamada só — evita rate limit
-    fetch('https://web.monde.com.br/api/v2/people?filter[name]='+encodeURIComponent(q)+'&page[size]=20',{headers:hdrs})
-      .then(function(r){
-        if(r.status===429){res.innerHTML='<div style="color:var(--orange);font-size:12px;padding:10px;text-align:center;">⏳ Muitas requisições. Aguarde alguns segundos e tente novamente.</div>';return {data:[]};}
-        return r.ok?r.json():{data:[]};
-      })
-      .then(function(d){
-        var list=d.data||[];
-        var filtered=list.filter(function(p){return (p.attributes&&p.attributes.name||'').toLowerCase().indexOf(qLow)>=0;});
-        renderRes(filtered.length>0?filtered:list);
-      })
-      .catch(function(){res.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao conectar ao Monde.</div>';});
+  // Filtra client-side em tempo real — zero chamadas adicionais
+  function filterLocal(q){
+    if(!_allPeople.length)return;
+    if(!q||q.trim().length<1){renderRes(_allPeople.slice(0,30));return;}
+    var qLow=q.toLowerCase().trim();
+    var filtered=_allPeople.filter(function(p){
+      var a=p.attributes||{};
+      var name=(a.name||'').toLowerCase();
+      var cpf=(a.cpf||'').replace(/\D/g,'');
+      var tel=((a['mobile-phone']||'')+(a.phone||'')).replace(/\D/g,'');
+      return name.indexOf(qLow)>=0||cpf.indexOf(qLow.replace(/\D/g,''))>=0||tel.indexOf(qLow.replace(/\D/g,''))>=0;
+    });
+    renderRes(filtered.slice(0,30));
   }
 
-  if(inp){
-    inp.focus();
-    inp.value=lead.name;
-    doSearch(lead.name);
-    inp.addEventListener('input',function(){clearTimeout(tim);tim=setTimeout(function(){doSearch(inp.value.trim());},450);});
-  }
+  // UMA única chamada ao abrir o modal — carrega página com 50 registros
+  res.innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;">⏳ Carregando clientes do Monde...</div>';
+  mondeFetch('https://web.monde.com.br/api/v2/people?page[size]=50&page[number]=1',{
+    headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token}
+  }).then(function(r){
+    if(r.status===429){
+      res.innerHTML='<div style="color:var(--orange);font-size:12px;padding:12px;text-align:center;">⏳ Limite de requisições atingido. Aguarde 30 segundos e reabra.</div>';
+      return {data:[]};
+    }
+    return r.ok?r.json():{data:[]};
+  }).then(function(d){
+    _allPeople=d.data||[];
+    if(!_allPeople.length){res.innerHTML='<div style="text-align:center;padding:14px;color:var(--muted);">Nenhum registro encontrado no Monde.</div>';return;}
+    if(inp){inp.disabled=false;inp.value=lead.name;inp.focus();}
+    // Já filtra com o nome do lead
+    filterLocal(lead.name);
+    if(inp)inp.addEventListener('input',function(){filterLocal(inp.value);});
+  }).catch(function(e){
+    res.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao conectar ao Monde: '+(e.message||'falha')+'</div>';
+  });
 }
 
 
@@ -1201,7 +1250,7 @@ function mondeCriarPessoa(lead,token){
   var waClean=cleanWA(lead.whatsapp||'');
   if(waClean.length===11)attrs['mobile-phone']=waClean;
   else if(waClean.length===10)attrs.phone=waClean;
-  return fetch('https://web.monde.com.br/api/v2/people',{
+  return mondeFetch('https://web.monde.com.br/api/v2/people',{
     method:'POST',
     headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token},
     body:JSON.stringify({data:{type:'people',attributes:attrs}})
@@ -1249,7 +1298,7 @@ function mondeCriarTarefa(lead,personId,token,map){
   var body={data:{type:'tasks',attributes:taskAttrs}};
   if(Object.keys(rels).length>0)body.data.relationships=rels;
 
-  return fetch('https://web.monde.com.br/api/v2/tasks',{
+  return mondeFetch('https://web.monde.com.br/api/v2/tasks',{
     method:'POST',
     headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token},
     body:JSON.stringify(body)
@@ -1285,59 +1334,41 @@ function cadastrarNoMonde(leadId,btn){
     })
     .then(function(map){
       _map=map;
-      // Busca estrita: só usa cadastro existente se CPF ou telefone baterem exatamente
-      return mondeBuscarPessoa(lead,_token).then(function(existing){
-        if(existing&&existing.id){
-          showToast('ℹ️ Cliente encontrado no Monde — vinculando tarefa ao cadastro existente','info');
-          return {data:existing,existia:true};
-        }
-        // Não encontrou match confiável → cria pessoa nova
-        return mondeCriarPessoa(lead,_token).then(function(d){return {data:d.data,existia:false};});
-      });
+      // Tenta criar diretamente — sem pré-busca (economiza chamadas de API)
+      // Se CPF já existir, o catch abre o modal de busca interativa
+      return mondeCriarPessoa(lead,_token).then(function(d){return {data:d.data,existia:false};});
     })
     .then(function(pessoaResult){
       var mondePersonId=pessoaResult.data&&pessoaResult.data.id||'';
-      // Salva mondeId parcialmente JÁ AQUI — evita Pessoa duplicada se Tarefa falhar
       var idx=leads.findIndex(function(l){return l.id===leadId;});
-      if(idx>=0){leads[idx].mondeId=mondePersonId;leads[idx].mondePersonExistia=pessoaResult.existia||false;saveLeads(leads);}
+      if(idx>=0){leads[idx].mondeId=mondePersonId;leads[idx].mondePersonExistia=false;saveLeads(leads);}
       return mondeCriarTarefa(lead,mondePersonId,_token,_map)
-        .then(function(tarefaData){return {mondeId:mondePersonId,mondeTaskId:tarefaData&&tarefaData.data&&tarefaData.data.id||'',existia:pessoaResult.existia};});
+        .then(function(tarefaData){return {mondeId:mondePersonId,mondeTaskId:tarefaData&&tarefaData.data&&tarefaData.data.id||'',existia:false};});
     })
     .then(function(result){
       var idx=leads.findIndex(function(l){return l.id===leadId;});
       if(idx>=0){
-        leads[idx].mondeSynced=true;
-        leads[idx].mondeId=result.mondeId;
-        leads[idx].mondeTaskId=result.mondeTaskId;
-        leads[idx].mondeSyncedAt=nowISO();
+        leads[idx].mondeSynced=true;leads[idx].mondeId=result.mondeId;
+        leads[idx].mondeTaskId=result.mondeTaskId;leads[idx].mondeSyncedAt=nowISO();
         saveLeads(leads);
       }
       if(btn){btn.disabled=false;btn.textContent='✅ Cadastrado!';}
-      var msg=result.existia
-        ?'✅ Pessoa já existia no Monde — Tarefa "Emitir Contrato" criada e vinculada!'
-        :'✅ Pessoa + Tarefa "Emitir Contrato" criados no Monde!';
-      showToast(msg,'success');
-      logEvent('monde_sync',msg+' | Lead: '+lead.name+' | Pessoa='+result.mondeId+' | Tarefa='+result.mondeTaskId);
+      showToast('✅ Pessoa + Tarefa "Emitir Contrato" criados no Monde!','success');
+      logEvent('monde_sync','Sincronizou: '+lead.name+' | Pessoa='+result.mondeId+' | Tarefa='+result.mondeTaskId);
       setTimeout(function(){var l2=getLeads().find(function(x){return x.id===leadId;});if(l2)openLeadForm(l2);},800);
     })
     .catch(function(err){
-      // FALLBACK INTELIGENTE: se CPF já cadastrado, busca a pessoa e tenta criar só a tarefa
       var msg=err.message||'';
-      var cpfClean2=lead.cpf?lead.cpf.replace(/\D/g,''):'';
-      if(msg.toLowerCase().indexOf('cpf')>=0&&msg.toLowerCase().indexOf('cadastrad')>=0&&_token){
-        showToast('🔍 CPF já existe no Monde — buscando cadastro...','info');
-        mondeBuscarPessoa(lead,_token).then(function(existing){
-          if(existing&&existing.id){
-            _criarTarefaEFinalizar(existing.id,leadId,lead,_token,_map,btn,leads,true);
-          } else {
-            // Não achou por CPF/telefone → pede ID manual
-            if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
-            mondePedirIdManual(leadId,_token,_map);
-          }
-        }).catch(function(){
-          if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
-          mondePedirIdManual(leadId,_token,_map);
-        });
+      // Rate limit → avisa e para
+      if(msg.toLowerCase().indexOf('limite')>=0||msg.toLowerCase().indexOf('rate')>=0||msg.toLowerCase().indexOf('excedeu')>=0){
+        if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
+        showToast('⏳ Monde: limite de requisições. Aguarde 30s e tente novamente.','warn');
+        return;
+      }
+      // CPF já cadastrado → abre modal de busca interativa (sem chamadas extras)
+      if(msg.toLowerCase().indexOf('cpf')>=0&&msg.toLowerCase().indexOf('cadastrad')>=0){
+        if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
+        mondePedirIdManual(leadId,_token,_map);
         return;
       }
       if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
