@@ -163,6 +163,8 @@ tr:hover td{background:#F5F8FF;}
 .card-days{font-size:9px;color:var(--muted);}
 .card-av{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800;color:#fff;}
 .card-actions{display:flex;gap:3px;margin-top:5px;flex-wrap:wrap;}
+.btn-card{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:3px 6px;cursor:pointer;font-size:11px;transition:all .1s;}
+.btn-card:hover{background:var(--border);}
 .cbtn{padding:4px 8px;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;}
 .cbtn-teal{background:rgba(2,128,144,.1);color:var(--teal);}
 .cbtn-red{background:rgba(229,57,53,.1);color:var(--red);}
@@ -1670,6 +1672,8 @@ function visLeads(all){
   var u=S.user;
   if(u.role==='consultant')leads=leads.filter(function(l){return l.consultantId===u.id;});
   else if(u.role==='manager')leads=leads.filter(function(l){return u.stores.indexOf(l.storeId)>=0;});
+  else if(u.role==='posvenda')leads=leads.filter(function(l){return u.stores.indexOf(l.storeId)>=0;});
+  // admin sees ALL leads — no filter
   if(S.store)leads=leads.filter(function(l){return l.storeId===S.store;});
   if(!all)leads=leads.filter(function(l){return !l.lost||daysSince(l.lostDate)<15;});
   return leads;
@@ -1697,7 +1701,7 @@ function renderDashboard(){
   var closedPrev=visLeads().filter(function(l){return isClosed(l)&&(l.saleDate||l.closedDate||'').substring(0,7)===prevM;});
   var totalGMVPrev=closedPrev.reduce(function(a,l){return a+(l.gmv||0);},0);
   var gmvDelta=totalGMVPrev>0?Math.round((totalGMV-totalGMVPrev)/totalGMVPrev*100):0;
-  var allUsers=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  var allUsers=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager'||u.role==='admin';});
   var allActs=getActivities();
   // Calculate data for all users
   var rankData=allUsers.map(function(u){
@@ -1864,7 +1868,7 @@ function renderManager(){
   var leads=visLeads();
   var u=S.user;
   var consultants=getUsers().filter(function(c){
-    return (c.role==='consultant'||c.role==='manager')&&c.id!==u.id&&(u.role==='admin'||u.stores.some(function(s){return c.stores&&c.stores.indexOf(s)>=0;}));
+    return (c.role==='consultant'||c.role==='manager'||c.role==='admin')&&(u.role==='admin'||u.stores.some(function(s){return c.stores&&c.stores.indexOf(s)>=0;}));
   });
   var alerts=[];
   consultants.forEach(function(c){
@@ -2089,10 +2093,15 @@ function renderKanban(){
   var users=getUsers();
   var h='';
   h+='<div class="page-header"><div><div class="page-title">🎯 Funil Kanban</div></div>';
-  h+='<button class="btn btn-primary" id="kb-add-btn">+ Novo Lead</button></div>';
+  h+='<div style="display:flex;gap:8px;">';
+  if(S.user.role==='admin'||S.user.role==='manager'){
+    h+='<button class="btn btn-ghost btn-sm" id="kb-reload-btn" title="Recarregar leads do banco">↺ Atualizar</button>';
+  }
+  h+='<button class="btn btn-primary" id="kb-add-btn">+ Novo Lead</button>';
+  h+='</div></div>';
   h+='<div class="filter-bar">';
   h+='<select class="fsel" id="kb-cons"><option value="">Todos os Consultores</option>';
-  users.filter(function(u){return u.role!=='admin';}).forEach(function(u){
+  users.forEach(function(u){
     h+='<option value="'+u.id+'">'+u.name+'</option>';
   });
   h+='</select>';
@@ -2105,11 +2114,24 @@ function renderKanban(){
   if(pc){
     pc.innerHTML=h;
     var addBtn=document.getElementById('kb-add-btn');
+    var reloadBtn=document.getElementById('kb-reload-btn');
     var cemBtn=document.getElementById('kb-cem-btn');
     var consF=document.getElementById('kb-cons');
     var searchF=document.getElementById('kb-s');
     var hideEl=document.getElementById('kb-hide-empty');
     if(addBtn)addBtn.addEventListener('click',function(){openLeadForm(null);});
+    if(reloadBtn)reloadBtn.addEventListener('click',function(){
+      reloadBtn.textContent='⏳ Carregando...';reloadBtn.disabled=true;
+      supaGetAll('cvm_leads').then(function(leads){
+        DB.leads=leads||[];
+        reloadBtn.textContent='↺ Atualizar';reloadBtn.disabled=false;
+        renderKanbanBoard();
+        showToast('✅ '+DB.leads.length+' leads carregados','success');
+      }).catch(function(e){
+        reloadBtn.textContent='↺ Atualizar';reloadBtn.disabled=false;
+        showToast('Erro ao carregar: '+(e.message||'falha'),'error');
+      });
+    });
     if(cemBtn)cemBtn.addEventListener('click',showCemetery);
     if(consF)consF.addEventListener('change',renderKanbanBoard);
     if(searchF)searchF.addEventListener('input',renderKanbanBoard);
@@ -2176,9 +2198,97 @@ function renderKanbanBoard(){
   wrap.querySelectorAll('.lead-pv-btn').forEach(function(btn){btn.addEventListener('click',function(){moveToPosvenda(btn.getAttribute('data-id'));});});
   wrap.querySelectorAll('.lead-nps-btn').forEach(function(btn){btn.addEventListener('click',function(){openNPSModal(btn.getAttribute('data-id'));});});
   wrap.querySelectorAll('.lead-lost-btn').forEach(function(btn){btn.addEventListener('click',function(){markLostModal(btn.getAttribute('data-id'));});});
+  wrap.querySelectorAll('.lead-transfer-btn').forEach(function(btn){btn.addEventListener('click',function(){transferLead(btn.getAttribute('data-id'));});});
   wrap.querySelectorAll('.add-lead-btn').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(null,btn.getAttribute('data-stage'));});});
 }
 
+
+function renderCard(l){
+  var u=getUserById(l.consultantId);
+  var days=daysSince(l.entryDate||'');
+  var stale=isStaleNew(l);
+  var isFuLate=l.nextFollowup&&l.nextFollowup<today()&&!l.closed&&!l.lost;
+  var isFuToday=l.nextFollowup===today()&&!l.closed;
+  var isPv=l.stage==='posvenda';
+  var isDup=!!findAllByWA(l.whatsapp||'',l.id).filter(function(x){return !x.lost;}).length;
+  var cls='kb-card'+(stale?' stale-new':'')+(isPv?' pv-card':'')+(isDup?' dup-warn':'');
+  var canManage=S.user.role==='admin'||S.user.role==='manager';
+  var h='<div class="'+cls+'" draggable="true" data-id="'+l.id+'">';
+  h+='<div class="card-name">'+l.name+'</div>';
+  h+='<div class="card-dest">'+(l.destination||'—')+'</div>';
+  if(l.gmv||l.budget)h+='<div class="card-gmv">'+fmtM(l.gmv||l.budget||0)+(l.paxCount>1?' · '+l.paxCount+'px':'')+'</div>';
+  if(isFuLate)h+='<div class="card-fu fu-late">🔴 Atrasado '+daysSince(l.nextFollowup)+'d</div>';
+  else if(isFuToday)h+='<div class="card-fu fu-today">🟡 Retorno hoje</div>';
+  else if(l.nextFollowup)h+='<div class="card-fu fu-ok">📅 '+fmtDate(l.nextFollowup)+'</div>';
+  if(l.mondeSynced)h+='<div style="font-size:9px;color:var(--green);margin-top:2px;">🌍 Monde ✓</div>';
+  h+='<div class="card-meta"><span class="card-days">'+days+'d</span>';
+  if(u)h+='<div class="card-av" style="background:'+u.color+';" title="'+u.name+'">'+u.avatar+'</div>';
+  h+='</div>';
+  h+='<div class="card-actions">';
+  h+='<button class="btn-card lead-edit-btn2" data-id="'+l.id+'" title="Editar">✏️</button>';
+  if(!l.closed&&!l.lost&&l.stage!=='posvenda')h+='<button class="btn-card lead-advance-btn" data-id="'+l.id+'" title="Avançar etapa">→</button>';
+  if(l.stage==='fechado')h+='<button class="btn-card lead-pv-btn" data-id="'+l.id+'" title="Pós-venda">✈️</button>';
+  if(l.stage==='posvenda'&&l.nps===null)h+='<button class="btn-card lead-nps-btn" data-id="'+l.id+'" title="NPS">⭐</button>';
+  if(canManage)h+='<button class="btn-card lead-transfer-btn" data-id="'+l.id+'" title="Transferir para outro consultor">🔄</button>';
+  if(!l.closed&&!l.lost)h+='<button class="btn-card lead-lost-btn" data-id="'+l.id+'" title="Marcar como perdido" style="color:var(--red);">✗</button>';
+  h+='</div></div>';
+  return h;
+}
+
+function transferLead(id){
+  var lead=leadById(id);
+  if(!lead){showToast('Lead não encontrado','error');return;}
+  var consultants=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager'||u.role==='admin';});
+  var h='';
+  h+='<div style="margin-bottom:14px;">';
+  h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">Lead: '+lead.name+'</div>';
+  var curUser=getUserById(lead.consultantId);
+  h+='<div style="font-size:12px;color:var(--muted);">Consultor atual: <strong>'+(curUser?curUser.name:'—')+'</strong></div>';
+  h+='</div>';
+  h+='<div class="fg"><label class="flbl">Transferir para</label>';
+  h+='<select id="transfer-cons" class="fselect">';
+  consultants.forEach(function(u){
+    if(u.id!==lead.consultantId){
+      h+='<option value="'+u.id+'">'+u.name+' — '+(getStores().filter(function(s){return u.stores&&u.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(', '))+'</option>';
+    }
+  });
+  h+='</select></div>';
+  h+='<div class="fg" style="margin-top:10px;"><label class="flbl">Motivo da transferência (opcional)</label>';
+  h+='<input type="text" id="transfer-reason" class="finput" placeholder="Ex: Consultor de férias, especialidade..."/></div>';
+  openModal('🔄 Transferir Lead',h,'');
+  var footer=document.getElementById('modal-footer');
+  if(footer){
+    footer.innerHTML='';
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
+    var confirmBtn=document.createElement('button');confirmBtn.className='btn btn-primary';confirmBtn.textContent='🔄 Transferir';
+    confirmBtn.addEventListener('click',function(){
+      var consEl=document.getElementById('transfer-cons');
+      var reasonEl=document.getElementById('transfer-reason');
+      var newConsId=consEl?consEl.value:'';
+      var reason=reasonEl?reasonEl.value.trim():'';
+      if(!newConsId){showToast('Selecione um consultor','error');return;}
+      var newCons=getUserById(newConsId);
+      var leads=getLeads();
+      var idx=leads.findIndex(function(l){return l.id===id;});
+      if(idx<0){showToast('Lead não encontrado','error');return;}
+      var oldConsName=curUser?curUser.name:'—';
+      leads[idx].consultantId=newConsId;
+      // Log da transferência nas notas
+      var logMsg='[TRANSFERÊNCIA '+today()+'] De: '+oldConsName+' → Para: '+(newCons?newCons.name:'—')+(reason?' | Motivo: '+reason:'');
+      leads[idx].notes=(leads[idx].notes?leads[idx].notes+'\n':'')+logMsg;
+      // Atualiza também a loja do lead para a loja do novo consultor (se tiver só uma)
+      if(newCons&&newCons.stores&&newCons.stores.length===1){
+        leads[idx].storeId=newCons.stores[0];
+      }
+      saveLeads(leads);
+      closeModal();
+      showToast('✅ Lead transferido para '+(newCons?newCons.name:'novo consultor')+'!','success');
+      logEvent('lead_transfer',logMsg);
+      if(S.view==='kanban')renderKanbanBoard();else navigate(S.view);
+    });
+    footer.appendChild(cancelBtn);footer.appendChild(confirmBtn);
+  }
+}
 
 function handleDrop(st){
   if(!S.dragId)return;
@@ -2401,10 +2511,10 @@ function renderPostSale(){
 function leadById(id){return getLeads().find(function(l){return l.id===id;});}
 
 function openLeadForm(lead,stagePreset){
-  var users=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager';});
+  var users=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager'||u.role==='admin';});
   var u=S.user;
-  var defCons=u.role==='consultant'?u.id:(lead&&lead.consultantId||'');
-  var defStore=S.store||(u.role==='consultant'&&u.stores[0])||(lead&&lead.storeId||'');
+  var defCons=u.role==='consultant'?u.id:u.role==='admin'?(lead&&lead.consultantId||u.id):(lead&&lead.consultantId||'');
+  var defStore=S.store||(u.role==='consultant'&&u.stores[0])||(lead&&lead.storeId||'')||(u.stores&&u.stores[0])||'bv';
   var isNew=!lead;
   var h='';
   h+='<div class="sec-lbl">Dados do Cliente</div>';
@@ -2598,7 +2708,7 @@ function saveLead(existId){
 // ── LEADS TABLE ───────────────────────────────────────────────────────────────
 
 function renderLeads(){
-  var users=getUsers().filter(function(u){return u.role!=='admin';});
+  var users=getUsers().filter(function(u){return u.active!==false;});
   var h='';
   h+='<div class="page-header"><div><div class="page-title">👥 Todos os Leads</div></div>';
   h+='<button class="btn btn-primary" id="lds-add-btn">+ Novo Lead</button></div>';
@@ -2659,6 +2769,7 @@ function filterLeads(){
     h+='<button class="btn btn-ghost btn-sm ld-edit" data-id="'+l.id+'">✏️</button>';
     if(!l.lost&&!l.closed)h+='<button class="btn btn-ghost btn-sm ld-lost" data-id="'+l.id+'">❌</button>';
     if(l.lost)h+='<button class="btn btn-ghost btn-sm ld-react" data-id="'+l.id+'">♻️</button>';
+    if(S.user.role==='admin'||S.user.role==='manager')h+='<button class="btn btn-ghost btn-sm ld-transfer" data-id="'+l.id+'" title="Transferir">🔄</button>';
     h+='</div></td>';
     h+='</tr>';
   });
@@ -2666,6 +2777,7 @@ function filterLeads(){
   tbody.querySelectorAll('.ld-edit').forEach(function(btn){btn.addEventListener('click',function(){openLeadForm(leadById(btn.getAttribute('data-id')));});});
   tbody.querySelectorAll('.ld-lost').forEach(function(btn){btn.addEventListener('click',function(){markLostModal(btn.getAttribute('data-id'));});});
   tbody.querySelectorAll('.ld-react').forEach(function(btn){btn.addEventListener('click',function(){reactivateLead(btn.getAttribute('data-id'));});});
+  tbody.querySelectorAll('.ld-transfer').forEach(function(btn){btn.addEventListener('click',function(){transferLead(btn.getAttribute('data-id'));});});
 }
 
 // ── TASKS ─────────────────────────────────────────────────────────────────────
