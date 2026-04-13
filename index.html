@@ -1131,44 +1131,73 @@ function _criarTarefaEFinalizar(mondePersonId,leadId,lead,token,map,btn,leads,ex
 }
 
 function mondePedirIdManual(leadId,token,map){
+  var lead=getLeads().find(function(l){return l.id===leadId;});
+  if(!lead)return;
   var h='';
-  h+='<div class="alert warn"><div class="alert-ico">⚠️</div><div>Não conseguimos encontrar o cadastro automaticamente. Cole abaixo o ID da pessoa no Monde para vincular a tarefa.</div></div>';
-  h+='<div class="fg" style="margin-top:12px;">';
-  h+='<label class="flbl">ID da Pessoa no Monde</label>';
-  h+='<input type="text" id="monde-manual-id" class="finput" placeholder="Ex: 8f3a2e91-bc44-4d12-9f87-2c8a94b0e631" style="font-family:monospace;font-size:12px;"/>';
+  h+='<div class="alert info" style="margin-bottom:14px;"><div class="alert-ico">🔍</div><div>Digite o nome do cliente como está cadastrado no Monde para vinculá-lo à venda.</div></div>';
+  h+='<div class="fg">';
+  h+='<label class="flbl">Buscar no Monde</label>';
+  h+='<input type="text" id="monde-search-input" class="finput" placeholder="Digite o nome do cliente..." autocomplete="off"/>';
   h+='</div>';
-  h+='<div style="font-size:11px;color:var(--muted);margin-top:8px;">Para encontrar o ID: abra o Monde → Pessoas → clique no cliente → copie o ID da URL ou dos detalhes.</div>';
-  openModal('🔗 Vincular manualmente ao Monde',h,'');
+  h+='<div id="monde-search-results" style="margin-top:10px;max-height:260px;overflow-y:auto;"></div>';
+  openModal('🌍 Buscar cliente no Monde',h,'');
   var footer=document.getElementById('modal-footer');
   if(footer){
     footer.innerHTML='';
-    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
-    var confirmBtn=document.createElement('button');confirmBtn.className='btn btn-primary';confirmBtn.textContent='🔗 Vincular e criar tarefa';
-    confirmBtn.addEventListener('click',function(){
-      var idEl=document.getElementById('monde-manual-id');
-      var manualId=(idEl?idEl.value.trim():'');
-      if(!manualId||manualId.length<10){showToast('Cole um ID válido do Monde','error');return;}
-      confirmBtn.disabled=true;confirmBtn.textContent='⏳ Criando tarefa...';
-      var leads=getLeads();
-      var lead=leads.find(function(l){return l.id===leadId;});
-      if(!lead){showToast('Lead não encontrado','error');return;}
-      mondeCriarTarefa(lead,manualId,token,map||_mondeMap).then(function(tarefaData){
-        var idx=leads.findIndex(function(l){return l.id===leadId;});
-        if(idx>=0){
-          leads[idx].mondeSynced=true;leads[idx].mondeId=manualId;
-          leads[idx].mondeTaskId=tarefaData&&tarefaData.data&&tarefaData.data.id||'';
-          leads[idx].mondeSyncedAt=nowISO();saveLeads(leads);
-        }
+    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';
+    cancelBtn.addEventListener('click',closeModal);
+    footer.appendChild(cancelBtn);
+  }
+  var searchInput=document.getElementById('monde-search-input');
+  var resultsDiv=document.getElementById('monde-search-results');
+  var searchTimer=null;
+  function renderResults(pessoas){
+    if(!pessoas||!pessoas.length){
+      resultsDiv.innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">Nenhum resultado. Tente outro nome.</div>';
+      return;
+    }
+    var h2='';
+    pessoas.forEach(function(p){
+      var attrs=p.attributes||{};
+      var nome=attrs.name||'—';
+      var cpf=attrs.cpf?attrs.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):'—';
+      var tel=attrs['mobile-phone']||attrs.phone||'—';
+      h2+='<div class="monde-result-item" data-id="'+p.id+'" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .15s;">';
+      h2+='<div style="font-weight:700;font-size:13px;color:var(--navy);">'+nome+'</div>';
+      h2+='<div style="font-size:11px;color:var(--muted);">CPF: '+cpf+' · Tel: '+tel+'</div>';
+      h2+='</div>';
+    });
+    resultsDiv.innerHTML=h2;
+    resultsDiv.querySelectorAll('.monde-result-item').forEach(function(el){
+      el.addEventListener('mouseenter',function(){el.style.borderColor='var(--teal)';el.style.background='rgba(2,128,144,.04)';});
+      el.addEventListener('mouseleave',function(){el.style.borderColor='var(--border)';el.style.background='';});
+      el.addEventListener('click',function(){
+        var personId=el.getAttribute('data-id');
+        var personName=el.querySelector('div').textContent;
         closeModal();
-        showToast('✅ Tarefa criada e vinculada à pessoa #'+manualId.substring(0,8)+'...','success');
-        logEvent('monde_sync','ID manual — '+lead.name+' | Pessoa='+manualId);
-        setTimeout(function(){var l2=getLeads().find(function(x){return x.id===leadId;});if(l2)openLeadForm(l2);},800);
-      }).catch(function(e){
-        confirmBtn.disabled=false;confirmBtn.textContent='🔗 Vincular e criar tarefa';
-        showToast('Erro ao criar tarefa: '+(e.message||'falha'),'error');
+        showToast('🔗 Vinculando à '+personName+'...','info');
+        _criarTarefaEFinalizar(personId,leadId,lead,token,map||_mondeMap,null,getLeads(),true);
       });
     });
-    footer.appendChild(cancelBtn);footer.appendChild(confirmBtn);
+  }
+  function doSearch(q){
+    if(!q||q.length<2){resultsDiv.innerHTML='';return;}
+    resultsDiv.innerHTML='<div style="text-align:center;padding:14px;color:var(--muted);font-size:12px;">🔍 Buscando...</div>';
+    var hdrs={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
+    fetch('https://web.monde.com.br/api/v2/people?q='+encodeURIComponent(q)+'&page[size]=10',{headers:hdrs})
+      .then(function(r){return r.ok?r.json():{data:[]};})
+      .then(function(d){renderResults(d.data||[]);})
+      .catch(function(){resultsDiv.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao buscar no Monde.</div>';});
+  }
+  if(searchInput){
+    searchInput.focus();
+    // Pré-preenche com o nome do cliente e já busca
+    searchInput.value=lead.name;
+    doSearch(lead.name);
+    searchInput.addEventListener('input',function(){
+      clearTimeout(searchTimer);
+      searchTimer=setTimeout(function(){doSearch(searchInput.value.trim());},400);
+    });
   }
 }
 
