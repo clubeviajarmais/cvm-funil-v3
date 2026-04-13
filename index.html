@@ -1032,7 +1032,7 @@ function mondeBuscarPorCPF(cpfClean,token){
 
 // ── CRIAR PESSOA ─────────────────────────────────────────────────────────────
 function mondeCriarPessoa(lead,token){
-  var attrs={name:lead.name};
+  var attrs={name:lead.name,kind:'individual'};
   var cpfClean=lead.cpf?(lead.cpf.replace(/\D/g,'')):'' ;
   if(cpfClean&&validarCPF(cpfClean))attrs.cpf=cpfClean;
   if(lead.birthDate)attrs['birth-date']=lead.birthDate;
