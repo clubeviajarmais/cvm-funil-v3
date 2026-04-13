@@ -1262,10 +1262,11 @@ function mondeCriarTarefa(lead,personId,token,map){
     +'\n\nCriado automaticamente pelo CVM Funil.';
 
   var cpfInfo=lead.cpf?(' | CPF: '+lead.cpf):'';
-  var dueDate=lead.embarqueDate||'';
-  if(!dueDate){var d=new Date();d.setDate(d.getDate()+2);dueDate=d.toISOString().substring(0,10);}
-
-  // due-date não é permitido pela API do Monde — removido
+  // Inclui CPF no título quando sem pessoa vinculada (para identificação no Monde)
+  var titleBase=personId
+    ?('Emitir Contrato — '+lead.name)
+    :('Emitir Contrato — '+lead.name+cpfInfo);
+  // due-date não é suportado pela API do Monde
   var taskAttrs={title:titleBase,description:desc};
 
   var rels={};
@@ -1296,6 +1297,9 @@ function mondeCriarTarefa(lead,personId,token,map){
 
 // ── CADASTRAR NO MONDE (fluxo completo com todas as correções) ────────────────
 function cadastrarNoMonde(leadId,btn){
+  // Limpa fila acumulada de tentativas anteriores
+  _mondeQueue=[];
+  _mondeQueueRunning=false;
   var leads=getLeads();
   var lead=leads.find(function(l){return l.id===leadId;});
   if(!lead){showToast('Lead não encontrado.','error');return;}
