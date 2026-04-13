@@ -1125,11 +1125,11 @@ function cadastrarNoMonde(leadId,btn){
     .then(function(map){
       _map=map;
       // BUSCA POR CPF PRIMEIRO para evitar duplicata
+      // Usa CPF limpo mesmo sem validação matemática (11 dígitos é suficiente para buscar)
       var cpfClean=lead.cpf?lead.cpf.replace(/\D/g,''):'';
-      if(cpfClean&&validarCPF(cpfClean)){
+      if(cpfClean&&cpfClean.length===11){
         return mondeBuscarPorCPF(cpfClean,_token).then(function(existing){
           if(existing){
-            // Cliente já existe no Monde — usa ID existente
             showToast('ℹ️ Cliente já existe no Monde — vinculando tarefa ao cadastro existente','info');
             return {data:existing,existia:true};
           }
@@ -1164,8 +1164,29 @@ function cadastrarNoMonde(leadId,btn){
       setTimeout(function(){var l2=getLeads().find(function(x){return x.id===leadId;});if(l2)openLeadForm(l2);},800);
     })
     .catch(function(err){
+      // FALLBACK INTELIGENTE: se CPF já cadastrado, busca a pessoa e tenta criar só a tarefa
+      var msg=err.message||'';
+      var cpfClean=lead.cpf?lead.cpf.replace(/\D/g,''):'';
+      if(msg.toLowerCase().indexOf('cpf')>=0&&msg.toLowerCase().indexOf('cadastrad')>=0&&cpfClean.length===11&&_token){
+        showToast('🔍 CPF já existe no Monde — buscando cadastro...','info');
+        mondeBuscarPorCPF(cpfClean,_token).then(function(existing){
+          if(!existing){if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}showToast('Erro Monde: '+msg,'error');return;}
+          var mondePersonId=existing.id;
+          var idx=leads.findIndex(function(l){return l.id===leadId;});
+          if(idx>=0){leads[idx].mondeId=mondePersonId;saveLeads(leads);}
+          return mondeCriarTarefa(lead,mondePersonId,_token,_map).then(function(tarefaData){
+            var idx2=leads.findIndex(function(l){return l.id===leadId;});
+            if(idx2>=0){leads[idx2].mondeSynced=true;leads[idx2].mondeId=mondePersonId;leads[idx2].mondeTaskId=tarefaData&&tarefaData.data&&tarefaData.data.id||'';leads[idx2].mondeSyncedAt=nowISO();saveLeads(leads);}
+            if(btn){btn.disabled=false;btn.textContent='✅ Cadastrado!';}
+            showToast('✅ Pessoa já existia no Monde — Tarefa criada e vinculada!','success');
+            logEvent('monde_sync','CPF encontrado — Tarefa vinculada: '+lead.name+' | Pessoa='+mondePersonId);
+            setTimeout(function(){var l2=getLeads().find(function(x){return x.id===leadId;});if(l2)openLeadForm(l2);},800);
+          });
+        }).catch(function(){if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}showToast('Erro Monde: '+msg,'error');});
+        return;
+      }
       if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
-      showToast('Erro Monde: '+(err.message||'falha desconhecida'),'error');
+      showToast('Erro Monde: '+msg,'error');
     });
 }
 function parseRawVal(el){
