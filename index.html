@@ -1025,89 +1025,81 @@ function validarCPF(cpf){
 function mondeBuscarPessoa(lead,token){
   var headers={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
   var cpfClean=lead.cpf?(lead.cpf.replace(/\D/g,'')):'' ;
+  var cpfFmt=cpfClean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
   var waClean=cleanWA(lead.whatsapp||'');
 
-  function strictMatch(list){
-    if(!list||!list.length)return null;
-    // 1ª: CPF exato
-    if(cpfClean&&cpfClean.length===11){
-      var byCpf=list.find(function(p){
-        return (p.attributes&&(p.attributes.cpf||'').replace(/\D/g,'')==cpfClean);
-      });
-      if(byCpf)return byCpf;
-    }
-    // 2ª: telefone exato (últimos 8 dígitos)
+  function matchesCpfOrPhone(p){
+    var attrs=p.attributes||{};
+    if(cpfClean&&(attrs.cpf||'').replace(/\D/g,'')===cpfClean)return true;
     if(waClean&&waClean.length>=8){
       var tail=waClean.slice(-8);
-      var byPhone=list.find(function(p){
-        var mp=(p.attributes&&p.attributes['mobile-phone']||'').replace(/\D/g,'');
-        var ph=(p.attributes&&p.attributes.phone||'').replace(/\D/g,'');
-        return mp.slice(-8)===tail||ph.slice(-8)===tail;
-      });
-      if(byPhone)return byPhone;
+      var mp=(attrs['mobile-phone']||'').replace(/\D/g,'');
+      var ph=(attrs.phone||'').replace(/\D/g,'');
+      if(mp.slice(-8)===tail||ph.slice(-8)===tail)return true;
     }
-    return null; // Sem match confiável → não retorna
+    return false;
   }
 
-  // Tenta 1: busca por CPF numérico (sem pontuação)
-  var searches=[];
-  if(cpfClean&&cpfClean.length===11){
-    searches.push(fetch('https://web.monde.com.br/api/v2/people?q='+cpfClean+'&page[size]=10',{headers:headers}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};}));
+  function scanPage(url){
+    return fetch(url,{headers:headers}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};});
   }
-  // Tenta 2: busca por telefone
-  if(waClean&&waClean.length>=8){
-    searches.push(fetch('https://web.monde.com.br/api/v2/people?q='+waClean+'&page[size]=10',{headers:headers}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};}));
-  }
-  if(!searches.length)return Promise.resolve(null);
 
-  return Promise.all(searches).then(function(results){
+  // Estratégia 1: filter[cpf] e filter[mobile-phone] em paralelo
+  var attempts=[];
+  if(cpfClean) attempts.push(scanPage('https://web.monde.com.br/api/v2/people?filter[cpf]='+cpfClean+'&page[size]=10'));
+  if(cpfFmt&&cpfFmt!==cpfClean) attempts.push(scanPage('https://web.monde.com.br/api/v2/people?filter[cpf]='+encodeURIComponent(cpfFmt)+'&page[size]=10'));
+  if(waClean) attempts.push(scanPage('https://web.monde.com.br/api/v2/people?filter[mobile-phone]='+waClean+'&page[size]=10'));
+  if(!attempts.length) return Promise.resolve(null);
+
+  return Promise.all(attempts).then(function(results){
     for(var i=0;i<results.length;i++){
-      var found=strictMatch(results[i].data||[]);
+      var found=(results[i].data||[]).find(matchesCpfOrPhone);
       if(found)return found;
     }
-    return null; // Nenhuma busca retornou match confiável
+    // Estratégia 2: varredura paginada até 400 registros com match client-side
+    function scanUntilFound(page){
+      if(page>4)return Promise.resolve(null);
+      return scanPage('https://web.monde.com.br/api/v2/people?page[size]=100&page[number]='+page)
+        .then(function(d){
+          var list=d.data||[];
+          var found=list.find(matchesCpfOrPhone);
+          if(found)return found;
+          if(list.length<100)return null; // última página
+          return scanUntilFound(page+1);
+        });
+    }
+    return scanUntilFound(1);
   }).catch(function(){return null;});
 }
 
-// Mantém compatibilidade
 function mondeBuscarPorCPF(cpfClean,token){
   return mondeBuscarPessoa({cpf:cpfClean,whatsapp:'',name:''},token);
 }
 
-// ── SELEÇÃO DE CANDIDATO QUANDO HÁ MÚLTIPLOS RESULTADOS ──────────────────────
+// ── SELEÇÃO DE CANDIDATO ─────────────────────────────────────────────────────
 function mondeEscolherCandidato(candidates,lead,token,map,resolve,reject,btn){
-  var h='<div class="alert info"><div class="alert-ico">🔍</div><div>Encontramos '+candidates.length+' pessoas com nome similar. Selecione qual delas é <strong>'+lead.name+'</strong>:</div></div>';
+  var h='<div class="alert info"><div class="alert-ico">🔍</div><div>Encontramos '+candidates.length+' pessoas. Selecione qual delas é <strong>'+lead.name+'</strong>:</div></div>';
   h+='<div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">';
   candidates.forEach(function(c,i){
-    var attrs=c.attributes||{};
-    var cpfMask=attrs.cpf?attrs.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):'—';
-    var tel=attrs['mobile-phone']||attrs.phone||'—';
+    var a=c.attributes||{};
+    var cpfMask=a.cpf?a.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):'—';
+    var tel=a['mobile-phone']||a.phone||'—';
     h+='<div class="monde-candidate" data-idx="'+i+'" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;">';
-    h+='<div style="font-weight:700;font-size:13px;color:var(--navy);">'+attrs.name+'</div>';
-    h+='<div style="font-size:11px;color:var(--muted);">CPF: '+cpfMask+' · Tel: '+tel+'</div>';
-    h+='</div>';
+    h+='<div style="font-weight:700;font-size:13px;color:var(--navy);">'+(a.name||'—')+'</div>';
+    h+='<div style="font-size:11px;color:var(--muted);">CPF: '+cpfMask+' · Tel: '+tel+'</div></div>';
   });
-  h+='</div>';
-  h+='<div style="margin-top:10px;"><button id="monde-novo-btn" style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:12px;font-weight:700;text-decoration:underline;">Nenhum desses — criar novo cadastro</button></div>';
-  openModal('👥 Qual é o cliente?',h,'');
+  h+='</div><div style="margin-top:10px;"><button id="monde-novo-btn" style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:12px;font-weight:700;text-decoration:underline;">Nenhum desses — criar novo cadastro</button></div>';
+  openModal('\u{1F465} Qual é o cliente?',h,'');
   var footer=document.getElementById('modal-footer');
-  if(footer){footer.innerHTML='';var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',function(){closeModal();if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}reject(new Error('Cancelado'));});footer.appendChild(cancelBtn);}
-  // Bind candidate clicks
+  if(footer){footer.innerHTML='';var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',function(){closeModal();if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde \u2192';}reject(new Error('Cancelado'));});footer.appendChild(cancelBtn);}
   document.querySelectorAll('.monde-candidate').forEach(function(el,i){
-    el.addEventListener('click',function(){
-      closeModal();
-      resolve({data:candidates[i],existia:true});
-    });
+    el.addEventListener('click',function(){closeModal();resolve({data:candidates[i],existia:true});});
     el.addEventListener('mouseenter',function(){el.style.borderColor='var(--teal)';el.style.background='rgba(2,128,144,.04)';});
     el.addEventListener('mouseleave',function(){el.style.borderColor='var(--border)';el.style.background='';});
   });
   var novoBtn=document.getElementById('monde-novo-btn');
-  if(novoBtn)novoBtn.addEventListener('click',function(){
-    closeModal();
-    mondeCriarPessoa(lead,token).then(function(d){resolve({data:d.data,existia:false});}).catch(reject);
-  });
+  if(novoBtn)novoBtn.addEventListener('click',function(){closeModal();mondeCriarPessoa(lead,token).then(function(d){resolve({data:d.data,existia:false});}).catch(reject);});
 }
-
 
 function _criarTarefaEFinalizar(mondePersonId,leadId,lead,token,map,btn,leads,existia){
   var idx=leads.findIndex(function(l){return l.id===leadId;});
@@ -1119,85 +1111,80 @@ function _criarTarefaEFinalizar(mondePersonId,leadId,lead,token,map,btn,leads,ex
       leads[idx2].mondeTaskId=tarefaData&&tarefaData.data&&tarefaData.data.id||'';
       leads[idx2].mondeSyncedAt=nowISO();saveLeads(leads);
     }
-    if(btn){btn.disabled=false;btn.textContent='✅ Cadastrado!';}
-    var m=existia?'✅ Pessoa já existia no Monde — Tarefa criada e vinculada!':'✅ Pessoa + Tarefa criados no Monde!';
+    if(btn){btn.disabled=false;btn.textContent='\u2705 Cadastrado!';}
+    var m=existia?'\u2705 Pessoa j\u00e1 existia no Monde \u2014 Tarefa criada e vinculada!':'\u2705 Pessoa + Tarefa criados no Monde!';
     showToast(m,'success');
     logEvent('monde_sync',m+' | Lead: '+lead.name+' | Pessoa='+mondePersonId);
     setTimeout(function(){var l2=getLeads().find(function(x){return x.id===leadId;});if(l2)openLeadForm(l2);},800);
   }).catch(function(e){
-    if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
+    if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde \u2192';}
     showToast('Erro ao criar tarefa: '+(e.message||'falha'),'error');
   });
 }
 
+// ── BUSCA INTERATIVA NO MONDE (fallback quando varredura automática não acha) ─
 function mondePedirIdManual(leadId,token,map){
   var lead=getLeads().find(function(l){return l.id===leadId;});
   if(!lead)return;
-  var h='';
-  h+='<div class="alert info" style="margin-bottom:14px;"><div class="alert-ico">🔍</div><div>Digite o nome do cliente como está cadastrado no Monde para vinculá-lo à venda.</div></div>';
-  h+='<div class="fg">';
-  h+='<label class="flbl">Buscar no Monde</label>';
-  h+='<input type="text" id="monde-search-input" class="finput" placeholder="Digite o nome do cliente..." autocomplete="off"/>';
-  h+='</div>';
-  h+='<div id="monde-search-results" style="margin-top:10px;max-height:260px;overflow-y:auto;"></div>';
-  openModal('🌍 Buscar cliente no Monde',h,'');
+  var h='<div class="alert info" style="margin-bottom:14px;"><div class="alert-ico">\u{1F50D}</div><div>Digite o nome do cliente <strong>como está no Monde</strong> e selecione da lista.</div></div>';
+  h+='<div class="fg"><label class="flbl">Buscar no Monde</label><input type="text" id="monde-si" class="finput" placeholder="Ex: Rafael Oliveira" autocomplete="off"/></div>';
+  h+='<div id="monde-sr" style="margin-top:10px;max-height:240px;overflow-y:auto;"></div>';
+  openModal('\u{1F30D} Localizar cliente no Monde',h,'');
   var footer=document.getElementById('modal-footer');
-  if(footer){
-    footer.innerHTML='';
-    var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';
-    cancelBtn.addEventListener('click',closeModal);
-    footer.appendChild(cancelBtn);
-  }
-  var searchInput=document.getElementById('monde-search-input');
-  var resultsDiv=document.getElementById('monde-search-results');
-  var searchTimer=null;
-  function renderResults(pessoas){
-    if(!pessoas||!pessoas.length){
-      resultsDiv.innerHTML='<div style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">Nenhum resultado. Tente outro nome.</div>';
-      return;
-    }
+  if(footer){footer.innerHTML='';var cb=document.createElement('button');cb.className='btn btn-ghost';cb.textContent='Cancelar';cb.addEventListener('click',closeModal);footer.appendChild(cb);}
+  var inp=document.getElementById('monde-si');
+  var res=document.getElementById('monde-sr');
+  var tim=null;
+  var hdrs={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
+
+  function renderRes(list){
+    if(!list||!list.length){res.innerHTML='<div style="text-align:center;padding:14px;color:var(--muted);font-size:13px;">Nenhum resultado — tente outro nome</div>';return;}
     var h2='';
-    pessoas.forEach(function(p){
-      var attrs=p.attributes||{};
-      var nome=attrs.name||'—';
-      var cpf=attrs.cpf?attrs.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):'—';
-      var tel=attrs['mobile-phone']||attrs.phone||'—';
-      h2+='<div class="monde-result-item" data-id="'+p.id+'" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .15s;">';
-      h2+='<div style="font-weight:700;font-size:13px;color:var(--navy);">'+nome+'</div>';
-      h2+='<div style="font-size:11px;color:var(--muted);">CPF: '+cpf+' · Tel: '+tel+'</div>';
-      h2+='</div>';
+    list.forEach(function(p){
+      var a=p.attributes||{};
+      var cpfShow=a.cpf?a.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):'—';
+      var tel=a['mobile-phone']||a.phone||'—';
+      h2+='<div class="monde-ri" data-id="'+p.id+'" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .15s;">';
+      h2+='<div style="font-weight:700;font-size:13px;color:var(--navy);">'+(a.name||'—')+'</div>';
+      h2+='<div style="font-size:11px;color:var(--muted);">CPF: '+cpfShow+' · Tel: '+tel+'</div></div>';
     });
-    resultsDiv.innerHTML=h2;
-    resultsDiv.querySelectorAll('.monde-result-item').forEach(function(el){
+    res.innerHTML=h2;
+    res.querySelectorAll('.monde-ri').forEach(function(el){
       el.addEventListener('mouseenter',function(){el.style.borderColor='var(--teal)';el.style.background='rgba(2,128,144,.04)';});
       el.addEventListener('mouseleave',function(){el.style.borderColor='var(--border)';el.style.background='';});
       el.addEventListener('click',function(){
-        var personId=el.getAttribute('data-id');
-        var personName=el.querySelector('div').textContent;
+        var pid=el.getAttribute('data-id');
+        var pname=el.querySelector('div').textContent;
         closeModal();
-        showToast('🔗 Vinculando à '+personName+'...','info');
-        _criarTarefaEFinalizar(personId,leadId,lead,token,map||_mondeMap,null,getLeads(),true);
+        showToast('\u{1F517} Vinculando a '+pname+'...','info');
+        _criarTarefaEFinalizar(pid,leadId,lead,token,map||_mondeMap,null,getLeads(),true);
       });
     });
   }
+
   function doSearch(q){
-    if(!q||q.length<2){resultsDiv.innerHTML='';return;}
-    resultsDiv.innerHTML='<div style="text-align:center;padding:14px;color:var(--muted);font-size:12px;">🔍 Buscando...</div>';
-    var hdrs={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
-    fetch('https://web.monde.com.br/api/v2/people?q='+encodeURIComponent(q)+'&page[size]=10',{headers:hdrs})
-      .then(function(r){return r.ok?r.json():{data:[]};})
-      .then(function(d){renderResults(d.data||[]);})
-      .catch(function(){resultsDiv.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao buscar no Monde.</div>';});
+    if(!q||q.length<2){res.innerHTML='';return;}
+    res.innerHTML='<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px;">\u{1F50D} Buscando no Monde...</div>';
+    // Busca paginada com filter[name] e q= em paralelo, filtra pelo nome digitado client-side
+    var qLow=q.toLowerCase();
+    Promise.all([
+      fetch('https://web.monde.com.br/api/v2/people?filter[name]='+encodeURIComponent(q)+'&page[size]=20',{headers:hdrs}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};}),
+      fetch('https://web.monde.com.br/api/v2/people?page[size]=100&page[number]=1',{headers:hdrs}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};})
+    ]).then(function(results){
+      var all={};
+      results.forEach(function(r){(r.data||[]).forEach(function(p){all[p.id]=p;});});
+      var combined=Object.values(all);
+      // Filtra client-side pelo nome digitado
+      var filtered=combined.filter(function(p){return (p.attributes&&p.attributes.name||'').toLowerCase().indexOf(qLow)>=0;});
+      renderRes(filtered.length>0?filtered:combined.slice(0,10));
+    }).catch(function(){res.innerHTML='<div style="color:var(--red);font-size:12px;padding:8px;">Erro ao conectar ao Monde.</div>';});
   }
-  if(searchInput){
-    searchInput.focus();
-    // Pré-preenche com o nome do cliente e já busca
-    searchInput.value=lead.name;
+
+  if(inp){
+    inp.focus();
+    inp.value=lead.name;
     doSearch(lead.name);
-    searchInput.addEventListener('input',function(){
-      clearTimeout(searchTimer);
-      searchTimer=setTimeout(function(){doSearch(searchInput.value.trim());},400);
-    });
+    inp.addEventListener('input',function(){clearTimeout(tim);tim=setTimeout(function(){doSearch(inp.value.trim());},450);});
   }
 }
 
