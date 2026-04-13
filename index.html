@@ -1270,29 +1270,49 @@ function mondeCriarTarefa(lead,personId,token,map){
   var taskAttrs={title:titleBase,description:desc};
 
   var rels={};
-  // Vincular pessoa
   if(personId)rels.person={data:{type:'people',id:personId}};
-  // Vincular empresa (loja correta)
   var companyId=map&&map.companies&&map.companies[lead.storeId];
   if(companyId)rels.company={data:{type:'companies',id:companyId}};
-  // Vincular categoria "Venda Confirmada"
-  var catId=map&&map.categories&&(map.categories.vendaConfirmada||map.categories.geral);
-  if(catId)rels['task-category']={data:{type:'task-categories',id:catId}};
-  // Vincular responsável (consultor que fechou)
   var userId=map&&map.users&&consultant&&map.users[consultant.id];
   if(userId)rels.responsible={data:{type:'users',id:userId}};
 
-  var body={data:{type:'tasks',attributes:taskAttrs}};
-  if(Object.keys(rels).length>0)body.data.relationships=rels;
+  // Categoria é OBRIGATÓRIA — busca sob demanda se não estiver no mapa
+  var catId=map&&map.categories&&(map.categories.vendaConfirmada||map.categories.geral);
+  var hdrs={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
 
-  return mondeFetch('https://web.monde.com.br/api/v2/tasks',{
-    method:'POST',
-    headers:{'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token},
-    body:JSON.stringify(body)
-  }).then(function(r){
-    if(r.status===201||r.status===200)return r.json();
-    return r.json().then(function(e){throw new Error('Tarefa: '+((e&&e.errors&&e.errors[0]&&e.errors[0].detail)||'Erro '+r.status));});
-  });
+  function enviarTarefa(cid){
+    if(cid)rels['task-category']={data:{type:'task-categories',id:cid}};
+    var body={data:{type:'tasks',attributes:taskAttrs}};
+    if(Object.keys(rels).length>0)body.data.relationships=rels;
+    return mondeFetch('https://web.monde.com.br/api/v2/tasks',{
+      method:'POST',headers:hdrs,body:JSON.stringify(body)
+    }).then(function(r){
+      if(r.status===201||r.status===200)return r.json();
+      return r.json().then(function(e){throw new Error('Tarefa: '+((e&&e.errors&&e.errors[0]&&e.errors[0].detail)||'Erro '+r.status));});
+    });
+  }
+
+  if(catId){
+    return enviarTarefa(catId);
+  }
+  // Categoria não estava no mapa — busca agora (1 chamada)
+  return mondeFetch('https://web.monde.com.br/api/v2/task-categories?page[size]=50',{headers:hdrs})
+    .then(function(r){return r.ok?r.json():{data:[]};})
+    .then(function(d){
+      var catMap={};
+      (d.data||[]).forEach(function(c){
+        var nm=(c.attributes&&(c.attributes.name||c.attributes.title)||'').toLowerCase();
+        if(nm.indexOf('venda confirm')>=0)catMap.vendaConfirmada=c.id;
+        if(nm.indexOf('geral')>=0&&!catMap.geral)catMap.geral=c.id;
+      });
+      _mondeMap.categories=catMap;
+      supaSetConfig('monde_map',{map:_mondeMap,updatedAt:nowISO()}).catch(function(){});
+      return enviarTarefa(catMap.vendaConfirmada||catMap.geral||null);
+    })
+    .catch(function(){
+      // Se falhar a busca de categoria, tenta criar sem ela (Monde pode rejeitar)
+      return enviarTarefa(null);
+    });
 }
 
 // ── CADASTRAR NO MONDE (fluxo completo com todas as correções) ────────────────
