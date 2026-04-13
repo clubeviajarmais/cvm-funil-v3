@@ -1021,55 +1021,55 @@ function validarCPF(cpf){
   return parseInt(c[10])===d2;
 }
 
-// ── BUSCAR PESSOA NO MONDE (nome + telefone + CPF) ───────────────────────────
-// Estratégia: busca por nome (sempre disponível), depois cruza CPF e telefone
+// ── BUSCAR PESSOA NO MONDE (busca estrita — só retorna match real) ─────────────
 function mondeBuscarPessoa(lead,token){
   var headers={'Content-Type':'application/vnd.api+json','Accept':'application/vnd.api+json','Authorization':'Bearer '+token};
   var cpfClean=lead.cpf?(lead.cpf.replace(/\D/g,'')):'' ;
   var waClean=cleanWA(lead.whatsapp||'');
-  var firstName=encodeURIComponent((lead.name||'').split(' ')[0]);
 
-  // Busca por primeiro nome
-  return fetch('https://web.monde.com.br/api/v2/people?q='+firstName+'&page[size]=25',{headers:headers})
-    .then(function(r){return r.ok?r.json():{data:[]};})
-    .then(function(d){
-      var list=d.data||[];
-      if(!list.length)return null;
-
-      // 1ª prioridade: match exato por CPF
-      if(cpfClean){
-        var byCpf=list.find(function(p){
-          return (p.attributes&&(p.attributes.cpf||'').replace(/\D/g,'')==cpfClean);
-        });
-        if(byCpf)return byCpf;
-      }
-
-      // 2ª prioridade: match por telefone/celular
-      if(waClean){
-        var byPhone=list.find(function(p){
-          var mp=(p.attributes&&p.attributes['mobile-phone']||'').replace(/\D/g,'');
-          var ph=(p.attributes&&p.attributes.phone||'').replace(/\D/g,'');
-          return mp===waClean||ph===waClean||
-                 mp.slice(-8)===waClean.slice(-8)||ph.slice(-8)===waClean.slice(-8);
-        });
-        if(byPhone)return byPhone;
-      }
-
-      // 3ª prioridade: match por nome completo exato
-      var fullName=(lead.name||'').toLowerCase().trim();
-      var byName=list.find(function(p){
-        return (p.attributes&&(p.attributes.name||'').toLowerCase().trim()===fullName);
+  function strictMatch(list){
+    if(!list||!list.length)return null;
+    // 1ª: CPF exato
+    if(cpfClean&&cpfClean.length===11){
+      var byCpf=list.find(function(p){
+        return (p.attributes&&(p.attributes.cpf||'').replace(/\D/g,'')==cpfClean);
       });
-      if(byName)return byName;
+      if(byCpf)return byCpf;
+    }
+    // 2ª: telefone exato (últimos 8 dígitos)
+    if(waClean&&waClean.length>=8){
+      var tail=waClean.slice(-8);
+      var byPhone=list.find(function(p){
+        var mp=(p.attributes&&p.attributes['mobile-phone']||'').replace(/\D/g,'');
+        var ph=(p.attributes&&p.attributes.phone||'').replace(/\D/g,'');
+        return mp.slice(-8)===tail||ph.slice(-8)===tail;
+      });
+      if(byPhone)return byPhone;
+    }
+    return null; // Sem match confiável → não retorna
+  }
 
-      // 4ª prioridade: múltiplos candidatos → retorna lista para seleção manual
-      if(list.length===1)return list[0];
-      return {_multiple:true,_candidates:list.slice(0,5)};
-    })
-    .catch(function(){return null;});
+  // Tenta 1: busca por CPF numérico (sem pontuação)
+  var searches=[];
+  if(cpfClean&&cpfClean.length===11){
+    searches.push(fetch('https://web.monde.com.br/api/v2/people?q='+cpfClean+'&page[size]=10',{headers:headers}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};}));
+  }
+  // Tenta 2: busca por telefone
+  if(waClean&&waClean.length>=8){
+    searches.push(fetch('https://web.monde.com.br/api/v2/people?q='+waClean+'&page[size]=10',{headers:headers}).then(function(r){return r.ok?r.json():{data:[]};}).catch(function(){return {data:[]};}));
+  }
+  if(!searches.length)return Promise.resolve(null);
+
+  return Promise.all(searches).then(function(results){
+    for(var i=0;i<results.length;i++){
+      var found=strictMatch(results[i].data||[]);
+      if(found)return found;
+    }
+    return null; // Nenhuma busca retornou match confiável
+  }).catch(function(){return null;});
 }
 
-// Mantém compatibilidade com código que ainda chama mondeBuscarPorCPF
+// Mantém compatibilidade
 function mondeBuscarPorCPF(cpfClean,token){
   return mondeBuscarPessoa({cpf:cpfClean,whatsapp:'',name:''},token);
 }
@@ -1266,19 +1266,13 @@ function cadastrarNoMonde(leadId,btn){
     })
     .then(function(map){
       _map=map;
-      var cpfClean=lead.cpf?lead.cpf.replace(/\D/g,''):'';
-      // Busca pessoa existente por nome+telefone+CPF antes de criar
+      // Busca estrita: só usa cadastro existente se CPF ou telefone baterem exatamente
       return mondeBuscarPessoa(lead,_token).then(function(existing){
-        if(existing&&existing._multiple){
-          // Múltiplos candidatos — mostra seleção ao usuário
-          return new Promise(function(resolve,reject){
-            mondeEscolherCandidato(existing._candidates,lead,_token,_map,resolve,reject,btn);
-          });
-        }
         if(existing&&existing.id){
           showToast('ℹ️ Cliente encontrado no Monde — vinculando tarefa ao cadastro existente','info');
           return {data:existing,existia:true};
         }
+        // Não encontrou match confiável → cria pessoa nova
         return mondeCriarPessoa(lead,_token).then(function(d){return {data:d.data,existia:false};});
       });
     })
@@ -1314,23 +1308,17 @@ function cadastrarNoMonde(leadId,btn){
       if(msg.toLowerCase().indexOf('cpf')>=0&&msg.toLowerCase().indexOf('cadastrad')>=0&&_token){
         showToast('🔍 CPF já existe no Monde — buscando cadastro...','info');
         mondeBuscarPessoa(lead,_token).then(function(existing){
-          if(!existing||(!existing.id&&!existing._multiple)){
+          if(existing&&existing.id){
+            _criarTarefaEFinalizar(existing.id,leadId,lead,_token,_map,btn,leads,true);
+          } else {
+            // Não achou por CPF/telefone → pede ID manual
             if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
             mondePedirIdManual(leadId,_token,_map);
-            return;
           }
-          if(existing._multiple){
-            mondeEscolherCandidato(existing._candidates,lead,_token,_map,
-              function(pessoaResult){
-                var pid=pessoaResult.data&&pessoaResult.data.id||'';
-                _criarTarefaEFinalizar(pid,leadId,lead,_token,_map,btn,leads,pessoaResult.existia);
-              },
-              function(){if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}},
-              btn);
-            return;
-          }
-          _criarTarefaEFinalizar(existing.id,leadId,lead,_token,_map,btn,leads,true);
-        }).catch(function(){if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}mondePedirIdManual(leadId,_token,_map);});
+        }).catch(function(){
+          if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
+          mondePedirIdManual(leadId,_token,_map);
+        });
         return;
       }
       if(btn){btn.disabled=false;btn.textContent='Cadastrar no Monde →';}
