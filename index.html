@@ -6,7 +6,7 @@
 <title>CVM · Plataforma de Vendas v3</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
-:root{--navy:#0F1F45;--navy2:#1A2E5E;--navy3:#0A1830;--teal:#028090;--teal2:#016f7e;--mint:#02C39A;--orange:#F4A261;--yellow:#F9C74F;--red:#E53935;--green:#16A34A;--purple:#8B5CF6;--sky:#0EA5E9;--bg:#EEF1F8;--surface:#fff;--border:#DDE4F0;--muted:#6B7FA8;--text:#0F1F45;--sidebar-w:252px;--radius:12px;--shadow:0 2px 16px rgba(15,31,69,.1);}
+:root{--navy:#0F1F45;--navy2:#1A2E5E;--navy3:#0A1830;--teal:#028090;--teal2:#016f7e;--mint:#02C39A;--orange:#F4A261;--yellow:#F9C74F;--red:#E53935;--green:#16A34A;--purple:#8B5CF6;--sky:#0EA5E9;--bg:#EEF1F8;--surface:#fff;--border:#DDE4F0;--muted:#6B7FA8;--text:#0F1F45;--sidebar-w:252px;--radius:12px;--shadow:0 2px 16px rgba(15,31,69,.1);--cvm-blue:#28288C;--cvm-orange:#F06414;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
 .hidden{display:none!important;}
@@ -283,6 +283,9 @@ tr:hover td{background:#F5F8FF;}
 .info-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:5px;}
 .info-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;min-width:60px;}
 .info-val{font-family:'DM Mono',monospace;font-weight:700;color:var(--navy);}
+@media(max-width:1100px){
+  .grid-4{grid-template-columns:repeat(2,1fr);}
+}
 @media(max-width:900px){
   #sidebar{transform:translateX(-100%);}
   #sidebar.open{transform:translateX(0);box-shadow:4px 0 32px rgba(0,0,0,.4);}
@@ -292,6 +295,21 @@ tr:hover td{background:#F5F8FF;}
   .frow-2,.frow-3{grid-template-columns:1fr;}
   .hamburger{display:block;}
   .kb-board{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px;}
+}
+@media(max-width:640px){
+  /* Touch targets — mínimo 44px conforme WCAG/Apple HIG */
+  .btn{min-height:44px;padding:11px 18px;}
+  .btn-sm{min-height:38px;padding:9px 14px;font-size:12px;}
+  .form-input,.finput,.fselect{min-height:44px;font-size:16px;} /* 16px previne zoom no iOS */
+  .topbar{padding:0 14px;height:56px;}
+  .topbar-title{font-size:15px;}
+  .modal{max-width:100%;border-radius:14px 14px 0 0;margin:0;align-self:flex-end;}
+  #modal-overlay{padding:0;align-items:flex-end;}
+  .modal-header{padding:16px 18px 0;}
+  .modal-close{width:36px;height:36px;font-size:18px;}
+  .page-header{flex-direction:column;align-items:stretch;gap:10px;}
+  .kpi-val{font-size:22px;}
+  .login-card,.otp-card{padding:28px 22px;width:100%;}
 }
 #sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:49;backdrop-filter:blur(2px);}
 #sidebar-overlay.active{display:block;}
@@ -713,6 +731,25 @@ function canExport(){var r=S.user&&S.user.role;return r==='admin'||r==='manager'
 function pwStrength(pw){var s=0;if(pw.length>=8)s++;if(pw.length>=12)s++;if(/[A-Z]/.test(pw))s++;if(/[0-9]/.test(pw))s++;if(/[^A-Za-z0-9]/.test(pw))s++;return s;}
 
 // ── HTML HELPERS (NO nested template literals) ────────────────────────────────
+
+// Escape HTML para evitar XSS quando dados de usuário vão para innerHTML
+function esc(s){
+  if(s==null)return '';
+  return String(s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+// Escape para CSV (RFC4180)
+function csvEsc(v){
+  if(v==null)return '';
+  var s=String(v);
+  if(s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0||s.indexOf('\r')>=0){
+    return '"'+s.replace(/"/g,'""')+'"';
+  }
+  return s;
+}
+// Debounce — evita re-renders excessivos em inputs
+function debounce(fn,ms){var t;return function(){var a=arguments,c=this;clearTimeout(t);t=setTimeout(function(){fn.apply(c,a);},ms||200);};}
 
 function kpi(cls,icon,label,val,sub,extra){
   var h='<div class="kpi'+cls+'">';
@@ -1470,7 +1507,8 @@ function showOTP(user,code){
   _otp=null;
   logAuth(user,null,'login_ok','');
   S.user=user;
-  sls('session',user.id);
+  // Sessão com expiração de 24h
+  sls('session',{userId:user.id,expires:Date.now()+24*60*60*1000});
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.remove('hidden');
   initApp();
@@ -1966,7 +2004,7 @@ function renderDashboard(){
     h+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">';
     h+=avHtml(S.user,44);
     h+='<div style="flex:1;">';
-    h+='<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#fff;">'+S.user.name+'</div>';
+    h+='<div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#fff;">'+esc(S.user.name)+'</div>';
     if(myNivel>0){h+='<div style="margin-top:4px;"><span style="background:'+myColor+'44;color:'+myColor+';border:1px solid '+myColor+'88;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;">'+NIVEL_LABEL[myNivel]+'</span></div>';}
     h+='</div>';
     h+='<div style="text-align:right;">';
@@ -2029,7 +2067,7 @@ function renderDashboard(){
       h+='<div class="rank-item">';
       h+='<div class="rank-num" style="background:'+r.user.color+';color:#fff;">'+(medals[i]||i+1)+'</div>';
       h+='<div class="rank-info">';
-      h+='<div class="rank-name">'+r.user.name;
+      h+='<div class="rank-name">'+esc(r.user.name);
       if(nivel>0)h+='<span style="font-size:9px;background:'+nColor+'22;color:'+nColor+';border:1px solid '+nColor+'44;border-radius:10px;padding:1px 6px;margin-left:6px;font-weight:700;">'+NIVEL_LABEL[nivel]+'</span>';
       h+='</div>';
       h+='<div class="rank-sub">'+r.totalVendas+' vendas · '+fmtM(r.gmvMes);
@@ -2049,14 +2087,14 @@ function renderDashboard(){
       var c=getUserById(l.consultantId);
       h+='<div class="ma-item critical">';
       h+='<div class="ma-ico">⏱️</div>';
-      h+='<div class="ma-body"><div class="ma-title">'+l.name+'</div>';
-      h+='<div class="ma-sub">'+( c?c.name:'?')+' · '+(l.destination||'—')+' · '+hoursInStage(l).toFixed(1)+'h</div></div>';
+      h+='<div class="ma-body"><div class="ma-title">'+esc(l.name)+'</div>';
+      h+='<div class="ma-sub">'+( c?esc(c.name):'?')+' · '+esc(l.destination||'—')+' · '+hoursInStage(l).toFixed(1)+'h</div></div>';
       h+='<button class="btn btn-danger btn-sm lead-edit-btn" data-id="'+l.id+'">Ver</button>';
       h+='</div>';
     });
     h+='</div>';
   }
-  h+='<div class="card"><div class="card-title">📊 Meta de Abril</div>';
+  h+='<div class="card"><div class="card-title">📊 Meta de '+monthLabel(S.month)+'</div>';
   h+=progRow('GMV realizado',totalGMV,storeGoal,'var(--teal)');
   h+='</div>';
   var myStores=getStores().filter(function(s){return S.user.role==='admin'||S.user.stores.indexOf(s.id)>=0;}).filter(function(s){return !S.store||s.id===S.store;});
@@ -2140,7 +2178,7 @@ function renderManager(){
     var stores=getStores().filter(function(s){return c.stores&&c.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(' · ');
     h+='<div class="cons-card" style="border-left:4px solid '+c.color+';">';
     h+='<div style="display:flex;align-items:center;gap:10px;">'+avHtml(c,38);
-    h+='<div style="flex:1;"><div style="font-weight:800;font-size:13px;">'+c.name+'</div><div style="font-size:10px;color:var(--muted);">'+stores+'</div></div>';
+    h+='<div style="flex:1;"><div style="font-weight:800;font-size:13px;">'+esc(c.name)+'</div><div style="font-size:10px;color:var(--muted);">'+stores+'</div></div>';
     if(staleC.length>0)h+=pillHtml('🚨 '+staleC.length,'pill-red');
     else if(c.onLeave)h+=pillHtml('Afastado','pill-orange');
     else h+=pillHtml('Ativo','pill-green');
@@ -2193,7 +2231,7 @@ function renderManager(){
       var cons=getUserById(l.consultantId);
       var store=getStoreById(l.storeId);
       h+='<tr>';
-      h+='<td><div style="font-weight:700;font-size:12px;">'+l.name+'</div>'+(l.cpf?'<div style="font-size:10px;color:var(--muted);">CPF: '+l.cpf+'</div>':'')+'</td>';
+      h+='<td><div style="font-weight:700;font-size:12px;">'+esc(l.name)+'</div>'+(l.cpf?'<div style="font-size:10px;color:var(--muted);">CPF: '+esc(l.cpf)+'</div>':'')+'</td>';
       h+='<td style="font-size:12px;">'+(cons?cons.name:'—')+'</td>';
       h+='<td>'+(store?pillHtml(store.short,'pill-teal'):'—')+'</td>';
       h+='<td style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;">'+fmtM(l.gmv||0)+'</td>';
@@ -2334,7 +2372,7 @@ function renderKanban(){
   h+='<div class="filter-bar">';
   h+='<select class="fsel" id="kb-cons"><option value="">Todos os Consultores</option>';
   users.forEach(function(u){
-    h+='<option value="'+u.id+'">'+u.name+'</option>';
+    h+='<option value="'+esc(u.id)+'">'+esc(u.name)+'</option>';
   });
   h+='</select>';
   h+='<input type="text" class="fsearch" id="kb-s" placeholder="🔍 Buscar..."/>';
@@ -2366,7 +2404,7 @@ function renderKanban(){
     });
     if(cemBtn)cemBtn.addEventListener('click',showCemetery);
     if(consF)consF.addEventListener('change',renderKanbanBoard);
-    if(searchF)searchF.addEventListener('input',renderKanbanBoard);
+    if(searchF)searchF.addEventListener('input',debounce(renderKanbanBoard,200));
     if(hideEl)hideEl.addEventListener('change',renderKanbanBoard);
     renderKanbanBoard();
   }
@@ -2446,15 +2484,15 @@ function renderCard(l){
   var cls='kb-card'+(stale?' stale-new':'')+(isPv?' pv-card':'')+(isDup?' dup-warn':'');
   var canManage=S.user.role==='admin'||S.user.role==='manager';
   var h='<div class="'+cls+'" draggable="true" data-id="'+l.id+'">';
-  h+='<div class="card-name">'+l.name+'</div>';
-  h+='<div class="card-dest">'+(l.destination||'—')+'</div>';
+  h+='<div class="card-name">'+esc(l.name)+'</div>';
+  h+='<div class="card-dest">'+esc(l.destination||'—')+'</div>';
   if(l.gmv||l.budget)h+='<div class="card-gmv">'+fmtM(l.gmv||l.budget||0)+(l.paxCount>1?' · '+l.paxCount+'px':'')+'</div>';
   if(isFuLate)h+='<div class="card-fu fu-late">🔴 Atrasado '+daysSince(l.nextFollowup)+'d</div>';
   else if(isFuToday)h+='<div class="card-fu fu-today">🟡 Retorno hoje</div>';
   else if(l.nextFollowup)h+='<div class="card-fu fu-ok">📅 '+fmtDate(l.nextFollowup)+'</div>';
   if(l.mondeSynced)h+='<div style="font-size:9px;color:var(--green);margin-top:2px;">🌍 Monde ✓</div>';
   h+='<div class="card-meta"><span class="card-days">'+days+'d</span>';
-  if(u)h+='<div class="card-av" style="background:'+u.color+';" title="'+u.name+'">'+u.avatar+'</div>';
+  if(u)h+='<div class="card-av" style="background:'+u.color+';" title="'+esc(u.name)+'">'+esc(u.avatar)+'</div>';
   h+='</div>';
   h+='<div class="card-actions">';
   h+='<button class="btn-card lead-edit-btn2" data-id="'+l.id+'" title="Editar">✏️</button>';
@@ -2473,15 +2511,15 @@ function transferLead(id){
   var consultants=getUsers().filter(function(u){return u.role==='consultant'||u.role==='manager'||u.role==='admin';});
   var h='';
   h+='<div style="margin-bottom:14px;">';
-  h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">Lead: '+lead.name+'</div>';
+  h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px;">Lead: '+esc(lead.name)+'</div>';
   var curUser=getUserById(lead.consultantId);
-  h+='<div style="font-size:12px;color:var(--muted);">Consultor atual: <strong>'+(curUser?curUser.name:'—')+'</strong></div>';
+  h+='<div style="font-size:12px;color:var(--muted);">Consultor atual: <strong>'+(curUser?esc(curUser.name):'—')+'</strong></div>';
   h+='</div>';
   h+='<div class="fg"><label class="flbl">Transferir para</label>';
   h+='<select id="transfer-cons" class="fselect">';
   consultants.forEach(function(u){
     if(u.id!==lead.consultantId){
-      h+='<option value="'+u.id+'">'+u.name+' — '+(getStores().filter(function(s){return u.stores&&u.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(', '))+'</option>';
+      h+='<option value="'+esc(u.id)+'">'+esc(u.name)+' — '+(getStores().filter(function(s){return u.stores&&u.stores.indexOf(s.id)>=0;}).map(function(s){return s.short;}).join(', '))+'</option>';
     }
   });
   h+='</select></div>';
@@ -2675,7 +2713,7 @@ function showCemetery(){
   else{
     h+='<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Destino</th><th>Perdido em</th><th>Motivo</th><th></th></tr></thead><tbody>';
     leads.forEach(function(l){
-      h+='<tr><td><strong>'+l.name+'</strong></td><td>'+l.destination+'</td><td>'+fmtDate(l.lostDate)+'</td><td style="font-size:11px;max-width:140px;">'+(l.lostReason||'—')+'</td><td><button class="btn btn-ghost btn-sm react-lead-btn" data-id="'+l.id+'">♻️ Reativar</button></td></tr>';
+      h+='<tr><td><strong>'+esc(l.name)+'</strong></td><td>'+esc(l.destination||'—')+'</td><td>'+fmtDate(l.lostDate)+'</td><td style="font-size:11px;max-width:140px;">'+esc(l.lostReason||'—')+'</td><td><button class="btn btn-ghost btn-sm react-lead-btn" data-id="'+l.id+'">♻️ Reativar</button></td></tr>';
     });
     h+='</tbody></table></div>';
   }
@@ -2715,14 +2753,14 @@ function renderPostSale(){
       var retDays=ret?daysSince(l.returnDate):null;
       var urgent=ret&&l.nps===null&&retDays>=3;
       h+='<tr style="'+(urgent?'background:#FEF3C7;':'')+'">';
-      h+='<td><strong>'+l.name+'</strong>'+(urgent?' '+pillHtml('Urgente!','pill-orange'):'')+'</td>';
+      h+='<td><strong>'+esc(l.name)+'</strong>'+(urgent?' '+pillHtml('Urgente!','pill-orange'):'')+'</td>';
       h+='<td>'+(l.destination||'—')+'</td>';
       h+='<td>'+fmtDate(l.embarqueDate)+'</td>';
       h+='<td>'+fmtDate(l.returnDate)+'</td>';
       h+='<td>'+(ret?pillHtml('Retornou há '+retDays+'d','pill-green'):pillHtml('Em viagem','pill-sky'))+'</td>';
       if(l.nps!==null){h+='<td>'+npsHtml(l.nps)+'</td>';}
       else{h+='<td><button class="btn btn-ghost btn-sm pv-nps-btn" data-id="'+l.id+'">⭐ Coletar</button></td>';}
-      h+='<td>'+(u?'<span style="color:'+u.color+';font-weight:700;">'+u.name+'</span>':'—')+'</td>';
+      h+='<td>'+(u?'<span style="color:'+u.color+';font-weight:700;">'+esc(u.name)+'</span>':'—')+'</td>';
       h+='<td><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm pv-edit-btn" data-id="'+l.id+'">✏️</button>';
       var waNum=cleanWA(l.whatsapp||'');
       h+='<a class="btn btn-ghost btn-sm" href="https://wa.me/55'+waNum+'" target="_blank">💬</a></div></td>';
@@ -2751,15 +2789,15 @@ function openLeadForm(lead,stagePreset){
   var h='';
   h+='<div class="sec-lbl">Dados do Cliente</div>';
   h+='<div class="frow frow-2">';
-  h+='<div class="fg"><label class="flbl">Nome Completo <span style="color:var(--red);">*</span></label><input type="text" id="lf-n" class="finput" value="'+(lead&&lead.name||'')+'"/><span class="ferr" id="lf-n-e"></span></div>';
-  h+='<div class="fg"><label class="flbl">WhatsApp <span style="color:var(--red);">*</span></label><input type="text" id="lf-w" class="finput" value="'+(lead&&lead.whatsapp||'')+'" placeholder="(31) 99999-9999"/><span id="lf-w-m"></span></div>';
+  h+='<div class="fg"><label class="flbl">Nome Completo <span style="color:var(--red);">*</span></label><input type="text" id="lf-n" class="finput" value="'+esc(lead&&lead.name||'')+'"/><span class="ferr" id="lf-n-e"></span></div>';
+  h+='<div class="fg"><label class="flbl">WhatsApp <span style="color:var(--red);">*</span></label><input type="text" id="lf-w" class="finput" value="'+esc(lead&&lead.whatsapp||'')+'" placeholder="(31) 99999-9999"/><span id="lf-w-m"></span></div>';
   h+='</div>';
   h+='<div class="frow frow-2">';
-  h+='<div class="fg"><label class="flbl">CPF <span style="font-size:10px;color:var(--muted);">(para cadastro no Monde)</span></label><input type="text" id="lf-cpf" class="finput" value="'+(lead&&lead.cpf||'')+'" placeholder="000.000.000-00" maxlength="14"/></div>';
+  h+='<div class="fg"><label class="flbl">CPF <span style="font-size:10px;color:var(--muted);">(para cadastro no Monde)</span></label><input type="text" id="lf-cpf" class="finput" value="'+esc(lead&&lead.cpf||'')+'" placeholder="000.000.000-00" maxlength="14"/></div>';
   h+='<div class="fg"><label class="flbl">Data de Nascimento <span style="font-size:10px;color:var(--muted);">(para Monde)</span></label><input type="date" id="lf-birth" class="finput" value="'+(lead&&lead.birthDate||'')+'"/></div>';
   h+='</div>';
   h+='<div class="frow frow-2">';
-  h+='<div class="fg"><label class="flbl">E-mail</label><input type="email" id="lf-e" class="finput" value="'+(lead&&lead.email||'')+'"/></div>';
+  h+='<div class="fg"><label class="flbl">E-mail</label><input type="email" id="lf-e" class="finput" value="'+esc(lead&&lead.email||'')+'"/></div>';
   h+='<div class="fg"><label class="flbl">Origem</label><select id="lf-src" class="fselect">';
   SOURCES.forEach(function(s){h+='<option value="'+s+'"'+(lead&&lead.source===s?' selected':'')+'>'+s+'</option>';});
   h+='</select></div></div>';
@@ -2798,8 +2836,8 @@ function openLeadForm(lead,stagePreset){
   h+='</div>';
   h+='<div class="frow frow-3">';
   h+='<div class="fg"><label class="flbl">Passageiros</label><input type="number" id="lf-px" class="finput" value="'+(lead&&lead.paxCount||2)+'" min="1"/></div>';
-  h+='<div class="fg"><label class="flbl">Orçamento (R$)</label><input type="number" id="lf-b" class="finput" value="'+(lead&&lead.budget||'')+'" placeholder="15000"/></div>';
-  h+='<div class="fg"><label class="flbl">GMV Real (R$)</label><input type="number" id="lf-g" class="finput" value="'+(lead&&lead.gmv||'')+'" placeholder="0"/></div>';
+  h+='<div class="fg"><label class="flbl">Orçamento (R$)</label><input type="number" id="lf-b" class="finput" value="'+esc(lead&&lead.budget||'')+'" placeholder="15000"/></div>';
+  h+='<div class="fg"><label class="flbl">GMV Real (R$)</label><input type="number" id="lf-g" class="finput" value="'+esc(lead&&lead.gmv||'')+'" placeholder="0"/></div>';
   h+='</div>';
   h+='<div class="sec-lbl">Produtos / Upsell</div>';
   h+='<div class="check-group">';
@@ -2818,7 +2856,7 @@ function openLeadForm(lead,stagePreset){
   h+='</select></div></div>';
   h+='<div class="frow frow-2">';
   h+='<div class="fg"><label class="flbl">Próximo Follow-up</label><input type="date" id="lf-fu" class="finput" value="'+(lead&&lead.nextFollowup||'')+'"/></div>';
-  h+='<div class="fg"><label class="flbl">Notas</label><textarea id="lf-nt" class="ftextarea">'+(lead&&lead.notes||'')+'</textarea></div>';
+  h+='<div class="fg"><label class="flbl">Notas</label><textarea id="lf-nt" class="ftextarea">'+esc(lead&&lead.notes||'')+'</textarea></div>';
   h+='</div>';
   if(lead&&(lead.stage==='posvenda'||lead.stage==='fechado')){
     h+='<div class="sec-divider"></div><div class="sec-lbl">Pós-Venda</div>';
@@ -2833,7 +2871,12 @@ function openLeadForm(lead,stagePreset){
     footer.innerHTML='';
     var cancelBtn=document.createElement('button');cancelBtn.className='btn btn-ghost';cancelBtn.textContent='Cancelar';cancelBtn.addEventListener('click',closeModal);
     var saveBtn=document.createElement('button');saveBtn.className='btn btn-primary';saveBtn.textContent='💾 Salvar';
-    saveBtn.addEventListener('click',function(){saveLead(lead&&lead.id||'');});
+    saveBtn.addEventListener('click',function(){
+      if(saveBtn.disabled)return;
+      saveBtn.disabled=true;saveBtn.textContent='💾 Salvando...';
+      try{saveLead(lead&&lead.id||'');}
+      finally{setTimeout(function(){saveBtn.disabled=false;saveBtn.textContent='💾 Salvar';},1500);}
+    });
     footer.appendChild(cancelBtn);footer.appendChild(saveBtn);
   }
   var waEl=document.getElementById('lf-w');
@@ -2951,7 +2994,7 @@ function renderLeads(){
   h+='<option value="cemiterio">💀 Cemitério</option>';
   h+='</select>';
   h+='<select class="fsel" id="ld-c"><option value="">Todos</option>';
-  users.forEach(function(u){h+='<option value="'+u.id+'">'+u.name+'</option>';});
+  users.forEach(function(u){h+='<option value="'+esc(u.id)+'">'+esc(u.name)+'</option>';});
   h+='</select></div>';
   h+='<div class="card"><div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Destino</th><th>WhatsApp</th><th>Etapa</th><th>GMV</th><th>NPS</th><th>Consultor</th><th>Follow-up</th><th>Ações</th></tr></thead><tbody id="leads-tbody"></tbody></table></div></div>';
   var pc=document.getElementById('page-content');
@@ -2986,7 +3029,7 @@ function filterLeads(){
     var isOvd=l.nextFollowup&&l.nextFollowup<today()&&!l.closed&&!l.lost;
     var waNum=cleanWA(l.whatsapp||'');
     h+='<tr style="'+(stale?'background:#FEF2F2;':'')+'">';
-    h+='<td><strong>'+l.name+'</strong>'+(stale?' '+pillHtml('⏱️ '+hoursInStage(l).toFixed(0)+'h','pill-red'):'')+'</td>';
+    h+='<td><strong>'+esc(l.name)+'</strong>'+(stale?' '+pillHtml('⏱️ '+hoursInStage(l).toFixed(0)+'h','pill-red'):'')+'</td>';
     h+='<td style="font-size:12px;">'+(l.destination||'—')+'</td>';
     h+='<td><a href="https://wa.me/55'+waNum+'" target="_blank" style="color:var(--teal);text-decoration:none;">'+fmtWA(l.whatsapp||'—')+'</a></td>';
     h+='<td>';
@@ -2995,7 +3038,7 @@ function filterLeads(){
     h+='</td>';
     h+='<td style="font-family:DM Mono,monospace;">'+fmtM(l.gmv||l.budget||0)+'</td>';
     h+='<td>'+(l.nps!==null&&l.nps!==undefined?npsHtml(l.nps):'—')+'</td>';
-    h+='<td>'+(u?'<span style="color:'+u.color+';font-weight:700;">'+u.name+'</span>':'—')+'</td>';
+    h+='<td>'+(u?'<span style="color:'+u.color+';font-weight:700;">'+esc(u.name)+'</span>':'—')+'</td>';
     h+='<td style="color:'+(isOvd?'var(--red)':'inherit')+';">'+fmtDate(l.nextFollowup)+'</td>';
     h+='<td><div style="display:flex;gap:4px;">';
     h+='<button class="btn btn-ghost btn-sm ld-edit" data-id="'+l.id+'">✏️</button>';
@@ -3064,7 +3107,7 @@ function renderTasks(){
   todayTasks.forEach(function(t){
     h+='<div class="task-item'+(t.completed?' done':'')+'">';
     h+='<div class="task-check '+(t.completed?'checked':'')+' task-toggle" data-id="'+t.id+'">'+(t.completed?'✓':'')+'</div>';
-    h+='<div style="flex:1;"><div class="task-title">'+t.title+'</div>';
+    h+='<div style="flex:1;"><div class="task-title">'+esc(t.title)+'</div>';
     if(t.meta)h+='<div class="task-meta">'+t.meta+'</div>';
     h+='<span class="pill '+(typeColors[t.type]||'pill-gray')+'" style="font-size:9px;margin-top:4px;display:inline-block;">'+(typeLabels[t.type]||t.type)+'</span></div>';
     if(t.leadId)h+='<button class="btn btn-ghost btn-sm task-lead-btn" data-lid="'+t.leadId+'">🔗</button>';
@@ -3074,14 +3117,14 @@ function renderTasks(){
     h+='<div style="margin-top:12px;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:8px;">⚠️ Atrasadas</div>';
     overdueTasks.forEach(function(t){
       h+='<div class="task-item"><div class="task-check task-toggle" data-id="'+t.id+'"></div>';
-      h+='<div style="flex:1;"><div class="task-title">'+t.title+'</div><div class="task-meta">'+fmtDate(t.date)+'</div></div></div>';
+      h+='<div style="flex:1;"><div class="task-title">'+esc(t.title)+'</div><div class="task-meta">'+fmtDate(t.date)+'</div></div></div>';
     });
   }
   h+='</div><div>';
   if(fuLeads.length){
     h+='<div class="card" style="margin-bottom:14px;"><div class="card-title">🔔 Follow-ups para Hoje ('+fuLeads.length+')</div>';
     fuLeads.forEach(function(l){
-      h+='<div class="task-item"><div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">'+(l.destination||'—')+' · '+fmtM(l.budget||0)+'</div></div>';
+      h+='<div class="task-item"><div style="flex:1;"><div class="task-title">'+esc(l.name)+'</div><div class="task-meta">'+esc(l.destination||'—')+' · '+fmtM(l.budget||0)+'</div></div>';
       h+='<a class="btn btn-primary btn-sm" href="https://wa.me/55'+cleanWA(l.whatsapp||'')+'" target="_blank">💬</a></div>';
     });
     h+='</div>';
@@ -3090,7 +3133,7 @@ function renderTasks(){
     h+='<div class="card" style="margin-bottom:14px;border-top:3px solid var(--sky);">';
     h+='<div class="card-title" style="color:var(--sky);">✈️ Pós-Venda Urgente</div>';
     pvDue.forEach(function(l){
-      h+='<div class="task-item"><div style="flex:1;"><div class="task-title">'+l.name+'</div><div class="task-meta">Retornou há '+daysSince(l.returnDate)+'d · '+(l.destination||'—')+'</div></div>';
+      h+='<div class="task-item"><div style="flex:1;"><div class="task-title">'+esc(l.name)+'</div><div class="task-meta">Retornou há '+daysSince(l.returnDate)+'d · '+esc(l.destination||'—')+'</div></div>';
       h+='<button class="btn btn-sky btn-sm pv-nps-tsk" data-id="'+l.id+'">⭐ NPS</button></div>';
     });
     h+='</div>';
@@ -3297,7 +3340,7 @@ function openGoalEditor(){
     var cg=(goals.consultants&&goals.consultants[c.id])||{gmv:0,salesQty:0,metaSeguro:60,metaChip:50,metaTransfer:40,metaPasseios:30};
     var months=cg.months||{};
     h+='<div style="margin-bottom:14px;padding:14px;background:var(--bg);border-radius:10px;border-left:3px solid '+c.color+';">';
-    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+avHtml(c,26)+'<div style="font-weight:800;font-size:13px;">'+c.name+'</div></div>';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+avHtml(c,26)+'<div style="font-weight:800;font-size:13px;">'+esc(c.name)+'</div></div>';
     h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">';
     for(var mi=1;mi<=12;mi++){
       var val=months[mi]||cg.gmv||0;
@@ -3394,7 +3437,7 @@ function renderCommissions(){
   var cons=u.role==='consultant'?[u]:getUsers().filter(function(c){return c.role==='consultant'||(c.role==='manager'&&u.role==='admin');});
   var goals=getGoals();var r=35;var circ=2*Math.PI*r;
   var h='';
-  h+='<div class="page-header"><div><div class="page-title">💰 Comissões — Abril 2026</div></div></div>';
+  h+='<div class="page-header"><div><div class="page-title">💰 Comissões — '+monthLabel(S.month)+'</div></div></div>';
   h+='<div class="grid-3">';
   cons.filter(function(c){return c.role!=='admin';}).forEach(function(c){
     var cl=leads.filter(function(l){return l.consultantId===c.id&&(l.stage==='fechado'||l.stage==='posvenda')&&(filterByMonth(l));});
@@ -3414,7 +3457,7 @@ function renderCommissions(){
     var ins=calcUpsell(cl).find(function(m){return m.product==='Seguro Viagem';})||{pct:0};
     h+='<div class="card" style="text-align:center;">';
     h+='<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">'+avHtml(c,36);
-    h+='<div><div style="font-weight:800;font-size:14px;">'+c.name+'</div>'+pillHtml(level,levelCls)+'</div></div>';
+    h+='<div><div style="font-weight:800;font-size:14px;">'+esc(c.name)+'</div>'+pillHtml(level,levelCls)+'</div></div>';
     h+='<div class="ring-wrap"><svg width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="'+r+'" fill="none" stroke="var(--bg)" stroke-width="8"/><circle cx="45" cy="45" r="'+r+'" fill="none" stroke="'+c.color+'" stroke-width="8" stroke-dasharray="'+circ.toFixed(2)+'" stroke-dashoffset="'+offset.toFixed(2)+'" stroke-linecap="round"/></svg><div class="ring-text">'+ringPct+'%</div></div>';
     h+='<div style="font-family:Syne,sans-serif;font-size:32px;font-weight:800;color:var(--mint);">'+fmtM(comm)+'</div>';
     h+='<div style="font-size:11px;color:var(--muted);margin-top:4px;">Comissão estimada</div>';
@@ -3603,19 +3646,19 @@ function renderTeam(){
     h+='<div class="team-card" style="border-left-color:'+u.color+';'+(isDemo?'border:1.5px solid var(--orange);border-left:4px solid var(--orange);':'')+'">';
     h+='<div class="team-card-top">';
     h+='<div class="team-av" style="background:'+u.color+';">'+u.avatar+'</div>';
-    h+='<div style="flex:1;"><div class="team-name">'+u.name+'</div><div class="team-role">'+(ROLES[u.role]||u.role)+'</div></div>';
+    h+='<div style="flex:1;"><div class="team-name">'+esc(u.name)+'</div><div class="team-role">'+(ROLES[u.role]||u.role)+'</div></div>';
     h+=statusPill;
     h+='</div>';
-    h+='<div class="team-info-row" style="word-break:break-all;">📧 <span style="color:'+(isDemo?'var(--orange)':'var(--teal)')+';font-weight:600;">'+u.email+'</span>'+(isDemo?' <span style="font-size:9px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:4px;font-weight:700;">DEMO</span>':'')+'</div>';
+    h+='<div class="team-info-row" style="word-break:break-all;">📧 <span style="color:'+(isDemo?'var(--orange)':'var(--teal)')+';font-weight:600;">'+esc(u.email)+'</span>'+(isDemo?' <span style="font-size:9px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:4px;font-weight:700;">DEMO</span>':'')+'</div>';
     if(u.phone)h+='<div class="team-info-row">📱 '+u.phone+'</div>';
     h+='<div class="team-info-row" style="flex-wrap:wrap;gap:4px;">🏪 '+(stores||'—')+'</div>';
     if(u.onLeave&&u.leaveReturn)h+='<div class="team-info-row">📅 Retorno: '+fmtDate(u.leaveReturn)+'</div>';
     if(isAdmin){
       h+='<div style="display:flex;gap:6px;margin-top:10px;">';
       h+='<button class="btn btn-primary btn-sm team-edit-btn" data-id="'+u.id+'" style="flex:1;">✏️ Editar</button>';
-      h+='<button class="btn btn-sky btn-sm team-pw-btn" data-id="'+u.id+'" data-name="'+u.name+'" title="Redefinir senha">🔑</button>';
+      h+='<button class="btn btn-sky btn-sm team-pw-btn" data-id="'+esc(u.id)+'" data-name="'+esc(u.name)+'" title="Redefinir senha">🔑</button>';
       h+='<button class="btn btn-ghost btn-sm team-toggle-btn" data-id="'+u.id+'">'+(u.active?'⏸':'▶')+'</button>';
-      if(u.id!==S.user.id)h+='<button class="btn btn-danger btn-sm team-delete-btn" data-id="'+u.id+'" data-name="'+u.name+'">🗑️</button>';
+      if(u.id!==S.user.id)h+='<button class="btn btn-danger btn-sm team-delete-btn" data-id="'+esc(u.id)+'" data-name="'+esc(u.name)+'">🗑️</button>';
       h+='</div>';
     }
     h+='</div>';
@@ -3652,11 +3695,11 @@ function showCredentials(){
   users.forEach(function(u){
     var isDemo=u.email.indexOf('@cvm.com.br')>=0;
     h+='<tr style="'+(isDemo?'background:#FFFBEB;':'')+'">';
-    h+='<td><div style="display:flex;align-items:center;gap:8px;">'+avHtml(u,26)+'<strong>'+u.name+'</strong></div></td>';
-    h+='<td style="font-family:DM Mono,monospace;font-size:12px;color:'+(isDemo?'var(--orange)':'var(--teal)')+';">'+u.email+(isDemo?' ⚠️ demo':'')+'</td>';
-    h+='<td style="font-family:DM Mono,monospace;font-size:13px;font-weight:800;color:var(--navy);">'+u.password+'</td>';
+    h+='<td><div style="display:flex;align-items:center;gap:8px;">'+avHtml(u,26)+'<strong>'+esc(u.name)+'</strong></div></td>';
+    h+='<td style="font-family:DM Mono,monospace;font-size:12px;color:'+(isDemo?'var(--orange)':'var(--teal)')+';">'+esc(u.email)+(isDemo?' ⚠️ demo':'')+'</td>';
+    h+='<td style="font-family:DM Mono,monospace;font-size:13px;font-weight:800;color:var(--navy);">'+esc(u.password)+'</td>';
     h+='<td>'+pillHtml(ROLES[u.role]||u.role,u.role==='admin'?'pill-purple':u.role==='manager'?'pill-teal':u.role==='posvenda'?'pill-sky':'pill-gray')+'</td>';
-    h+='<td><button class="btn btn-primary btn-sm cred-pw-btn" data-id="'+u.id+'" data-name="'+u.name+'">🔑 Redefinir</button></td>';
+    h+='<td><button class="btn btn-primary btn-sm cred-pw-btn" data-id="'+esc(u.id)+'" data-name="'+esc(u.name)+'">🔑 Redefinir</button></td>';
     h+='</tr>';
   });
   h+='</tbody></table></div>';
@@ -3682,7 +3725,7 @@ function quickResetPw(userId,userName){
   h+='</div>';
   h+='<div class="fg" style="margin-top:10px;">';
   h+='<label class="flbl">Nova Senha <span style="color:var(--red);">*</span></label>';
-  h+='<input type="text" id="qr-pw" class="finput" placeholder="Mínimo 6 caracteres" autocomplete="off"/>';
+  h+='<input type="text" id="qr-pw" class="finput" placeholder="Mínimo 8 caracteres" autocomplete="off"/>';
   h+='<div style="font-size:10px;color:var(--muted);margin-top:3px;">Sugestão: CVM@2026! ou o primeiro nome + ano</div>';
   h+='</div>';
   openModal('🔑 Redefinir Acesso — '+userName,h,'');
@@ -3696,7 +3739,7 @@ function quickResetPw(userId,userName){
       var emailEl=document.getElementById('qr-email');
       var pw=pwEl?pwEl.value.trim():'';
       var newEmail=emailEl?emailEl.value.trim().toLowerCase():'';
-      if(!pw||pw.length<6){showToast('Senha mínima 6 caracteres','error');return;}
+      if(!pw||pw.length<8){showToast('Senha mínima 8 caracteres','error');return;}
       var users=getUsers();
       var idx=users.findIndex(function(u){return u.id===userId;});
       if(idx<0){showToast('Usuário não encontrado','error');return;}
@@ -3798,7 +3841,7 @@ function saveUser(existId){
   if(!name){showToast('Informe o nome completo','error');return;}
   if(!email||email.indexOf('@')<0){showToast('Informe um e-mail válido','error');return;}
   if(!existId&&!pw){showToast('Defina uma senha inicial para o colaborador','error');return;}
-  if(pw&&pw.length<6){showToast('Senha deve ter pelo menos 6 caracteres','error');return;}
+  if(pw&&pw.length<8){showToast('Senha deve ter pelo menos 8 caracteres','error');return;}
   if(!stores.length){showToast('Selecione ao menos uma loja','error');return;}
 
   var users=getUsers();
@@ -3866,9 +3909,9 @@ function renderAccount(){
   h+='<div class="card">';
   h+='<div class="card-title">👤 Meus Dados</div>';
   h+='<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">'+avHtml(u,52);
-  h+='<div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+u.name+'</div>';
+  h+='<div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;">'+esc(u.name)+'</div>';
   h+='<div style="font-size:12px;color:var(--muted);">'+ROLES[u.role]+'</div>';
-  h+='<div style="font-size:12px;color:var(--muted);">'+u.email+'</div>';
+  h+='<div style="font-size:12px;color:var(--muted);">'+esc(u.email)+'</div>';
   if(u.phone)h+='<div style="font-size:12px;color:var(--muted);">'+u.phone+'</div>';
   h+='</div></div>';
   h+='<div class="divider"></div>';
@@ -4160,9 +4203,10 @@ function exportLeads(){
   var leads=visLeads(true);
   var rows=[['Nome','WhatsApp','Destino','Etapa','GMV','NPS','Loja','Consultor','Data Entrada']];
   leads.forEach(function(l){rows.push([l.name,l.whatsapp,l.destination,l.stage,l.gmv||l.budget||0,l.nps!=null?l.nps:'',l.storeId,(getUserById(l.consultantId)||{name:''}).name,l.entryDate]);});
-  var csv=rows.map(function(r){return r.join(',');}).join('\n');
+  var csv=rows.map(function(r){return r.map(csvEsc).join(',');}).join('\r\n');
   var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='cvm-leads.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
   showToast('Exportação iniciada!','success');
 }
 
@@ -4171,22 +4215,29 @@ function exportNPS(){
   var leads=visLeads(true).filter(function(l){return l.nps!==null;});
   var rows=[['Nome','Destino','NPS','Consultor','Loja']];
   leads.forEach(function(l){rows.push([l.name,l.destination,l.nps,(getUserById(l.consultantId)||{name:''}).name,l.storeId]);});
-  var csv=rows.map(function(r){return r.join(',');}).join('\n');
+  var csv=rows.map(function(r){return r.map(csvEsc).join(',');}).join('\r\n');
   var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='cvm-nps.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
   showToast('NPS exportado!','success');
 }
 
 function resetData(){
-  if(!confirm('Resetar TODOS os dados?\n\nIsso apaga leads, tarefas e logs do banco de dados para TODOS os usuários.'))return;
+  if(!confirm('⚠️ ATENÇÃO — Resetar TODOS os dados?\n\nIsso apaga leads, tarefas e logs do banco de dados para TODOS os usuários, em TODAS as lojas.\n\nClique OK para continuar para a confirmação final.'))return;
+  var typed=prompt('Digite RESETAR (em maiúsculas) para confirmar a exclusão definitiva:');
+  if(typed!=='RESETAR'){showToast('Reset cancelado.','info');return;}
   // Limpa memória
   DB.leads=[];DB.tasks=[];DB.logs=[];
   DB.users=DEFAULT_USERS;DB.goals=DEFAULT_GOALS;
   // Grava defaults no Supabase
   supaUpsertAll('cvm_users',DEFAULT_USERS).catch(function(e){console.error(e);});
   supaSetConfig('goals',DEFAULT_GOALS).catch(function(e){console.error(e);});
-  // Apaga sessão local
-  localStorage.removeItem('cvm3_session');
+  // Apaga sessão e flags locais
+  try{
+    localStorage.removeItem('cvm3_session');
+    localStorage.removeItem('cvm3_leads_bkp');
+    localStorage.removeItem('cvm3_leads_seen');
+  }catch(e){}
   showToast('Dados resetados! Recarregando...','info');
   setTimeout(function(){location.reload();},1500);
 }
@@ -4219,6 +4270,20 @@ function init(){
   var ls=document.getElementById('loading-screen');
   if(ls)ls.style.display='flex';
 
+  // Timeout de segurança — se Supabase travar, mostra erro depois de 15s
+  var loadTimedOut=false;
+  var loadTimer=setTimeout(function(){
+    loadTimedOut=true;
+    if(ls){
+      ls.innerHTML='<div style="text-align:center;color:#fff;max-width:480px;padding:24px;">'
+        +'<div style="font-size:40px;margin-bottom:16px;">⏱️</div>'
+        +'<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;margin-bottom:10px;">Conexão lenta</div>'
+        +'<div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:18px;line-height:1.6;">O banco está demorando mais que o normal para responder. Verifique sua internet ou status do Supabase.</div>'
+        +'<button onclick="location.reload()" style="padding:11px 28px;background:#02C39A;border:none;border-radius:9px;font-family:Syne,sans-serif;font-weight:800;font-size:14px;color:#0F1F45;cursor:pointer;">↺ Tentar novamente</button>'
+        +'</div>';
+    }
+  },15000);
+
   Promise.all([
     supaGetAll('cvm_users'),
     supaGetAll('cvm_leads'),
@@ -4227,6 +4292,8 @@ function init(){
     supaGetConfig('goals'),
     supaGetAll('cvm_activities')
   ]).then(function(results){
+    if(loadTimedOut)return; // user já viu tela de erro
+    clearTimeout(loadTimer);
     var users=results[0]||[];
     var leads=results[1]||[];
     var tasks=results[2]||[];
@@ -4267,16 +4334,21 @@ function init(){
     supaUpsertAll('cvm_users',DB.users).catch(function(e){console.error(e);});
 
     // Recover leads from localStorage backup if Supabase returned empty
+    // Flag de "primeira inicialização" — evita restaurar backup se leads foram apagados de propósito
+    var supabaseEverHadLeads=false;
+    try{supabaseEverHadLeads=localStorage.getItem('cvm3_leads_seen')==='1';}catch(e){}
     var localBkp=null;
     try{var b=localStorage.getItem('cvm3_leads_bkp');if(b)localBkp=JSON.parse(b);}catch(e){}
-    if(leads.length===0&&localBkp&&localBkp.length>0){
-      console.warn('Supabase leads vazio — recuperando '+localBkp.length+' leads do backup local');
+    if(leads.length===0&&localBkp&&localBkp.length>0&&!supabaseEverHadLeads){
+      console.warn('Supabase leads vazio (1ª vez) — recuperando '+localBkp.length+' leads do backup local');
       DB.leads=localBkp;
       supaUpsertAll('cvm_leads',localBkp).then(function(){
         try{localStorage.removeItem('cvm3_leads_bkp');}catch(e){}
       }).catch(function(e){console.error('Falha ao re-salvar backup:',e);});
     } else {
       DB.leads=leads;
+      // Marca que o Supabase já respondeu com leads alguma vez — backup só restaura se NUNCA houve leads
+      if(leads.length>0){try{localStorage.setItem('cvm3_leads_seen','1');}catch(e){}}
     }
 
     DB.tasks=tasks;
@@ -4286,7 +4358,20 @@ function init(){
 
     if(ls)ls.style.display='none';
 
-    var sid=gls('session');
+    var sess=gls('session');
+    // Suporta formato novo {userId, expires} e legado (string)
+    var sid=null;
+    if(sess){
+      if(typeof sess==='string'){
+        // Legado: força re-login
+        try{localStorage.removeItem('cvm3_session');}catch(e){}
+      } else if(sess.userId&&sess.expires&&Date.now()<sess.expires){
+        sid=sess.userId;
+      } else {
+        // Sessão expirada
+        try{localStorage.removeItem('cvm3_session');}catch(e){}
+      }
+    }
     if(sid){
       var u=getUsers().find(function(x){return x.id===sid;});
       if(u){
@@ -4301,6 +4386,8 @@ function init(){
     bindLoginEvents();
 
   }).catch(function(err){
+    if(loadTimedOut)return;
+    clearTimeout(loadTimer);
     console.error('Supabase error:',err);
     if(ls){
       ls.innerHTML='<div style="text-align:center;color:#fff;max-width:480px;padding:24px;">'
