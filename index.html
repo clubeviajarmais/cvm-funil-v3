@@ -461,11 +461,11 @@ var DEFAULT_USERS = [
   {id:'u2',name:'Rafaella Miranda',email:'rafaellamiranda@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'manager',stores:['bv','sl'],active:true,avatar:'RM',color:'#028090'},
   {id:'u3',name:'Antônio Vieira',email:'antoniovieira@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bh'],active:true,avatar:'AV',color:'#1D4ED8'},
   {id:'u4',name:'Gabriel Costa',email:'gabrielcosta@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['sl'],active:true,avatar:'GC',color:'#8B5CF6'},
-  {id:'u5',name:'Fernanda Silva',email:'fernandasilva@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['sl'],active:false,onLeave:true,leaveReturn:'2026-05-01',avatar:'FS',color:'#E53935'},
-  {id:'u6',name:'Samuel Bernardino',email:'samuelbernardino@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:true,inTraining:true,avatar:'SB',color:'#16A34A'},
-  {id:'u7',name:'Aline Campelo',email:'alinecampelo@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:false,onLeave:true,leaveReturn:'2026-05-01',avatar:'AC',color:'#F4A261'},
+  {id:'u5',name:'Fernanda Silva',email:'fernandasilva@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['sl'],active:true,avatar:'FS',color:'#E53935'},
+  {id:'u6',name:'Samuel Bernardino',email:'samuelbernardino@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:true,avatar:'SB',color:'#16A34A'},
+  {id:'u7',name:'Aline Campelo',email:'alinecampelo@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:true,avatar:'AC',color:'#F4A261'},
   {id:'u8',name:'Maria Eduarda',email:'posvendas@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'posvenda',stores:['bv','sl','bh'],active:true,avatar:'ME',color:'#F9C74F'},
-  {id:'u9',name:'Ana Beatriz Pereira',email:'anapereira@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'posvenda',stores:['bv','sl'],active:false,onLeave:true,leaveReturn:'2026-05-01',avatar:'AB',color:'#E91E63'},
+  {id:'u9',name:'Ana Beatriz Pereira',email:'anapereira@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'posvenda',stores:['bv','sl'],active:true,avatar:'AB',color:'#E91E63'},
   {id:'u10',name:'Mônica Araújo',email:'monicaaraujo@clubeviajarmais.com.br',phone:'',password:'Cvm@2026',role:'consultant',stores:['bv'],active:true,avatar:'MA',color:'#0891B2'}
 ];
 
@@ -548,6 +548,7 @@ function consultantMonthGoal(userId,ym){
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────────────────
 var SUPA_URL='https://chbrdzzpypvwfpqonfqs.supabase.co';
+// ⚠️ ANON KEY — substitua o conteúdo entre as aspas ao rotacionar em Supabase → Settings → API → Reset anon key
 var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoYnJkenpweXB2d2ZwcW9uZnFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNzc4OTgsImV4cCI6MjA4ODY1Mzg5OH0.0xflWMXngRDvffTU1s9cpbrrvDZssOrhy9F3LJ0zJHk';
 
 // ── EMAILJS CONFIG ────────────────────────────────────────────────────────────
@@ -4304,26 +4305,10 @@ function init(){
     // Load Monde config from Supabase
     supaGetConfig('monde_config').then(function(mc){if(mc&&mc.login)DB.mondeConfig=mc;}).catch(function(){});
 
-    // Merge DEFAULT_USERS emails/names into loaded users (keeps passwords set by users, updates emails/names)
-    var mergedUsers=DEFAULT_USERS.map(function(def){
-      var existing=users.find(function(u){return u.id===def.id;});
-      if(existing){
-        // Always update email, name, role, stores from DEFAULT — keep password if user changed it
-        return Object.assign({},existing,{
-          email:def.email,
-          name:def.name,
-          role:def.role,
-          stores:def.stores,
-          avatar:def.avatar,
-          color:def.color,
-          active:def.active,
-          onLeave:def.onLeave||false,
-          inTraining:def.inTraining||false
-        });
-      }
-      return def; // New user not in DB yet
-    });
-    // Also add any NEW users from DEFAULT not in Supabase yet
+    // Banco é fonte de verdade. Defaults só preenchem usuários que NÃO existem ainda.
+    // Inclui TODOS os usuários do banco (mesmo IDs fora do DEFAULT_USERS — ex: u11, u12 e além).
+    var mergedUsers=users.slice(); // começa com tudo que veio do banco
+    // Adiciona defaults faltantes (só na 1ª inicialização, quando o banco está vazio ou faltam IDs)
     DEFAULT_USERS.forEach(function(def){
       if(!mergedUsers.find(function(u){return u.id===def.id;})){
         mergedUsers.push(def);
@@ -4390,15 +4375,39 @@ function init(){
     clearTimeout(loadTimer);
     console.error('Supabase error:',err);
     if(ls){
-      ls.innerHTML='<div style="text-align:center;color:#fff;max-width:480px;padding:24px;">'
-        +'<div style="font-size:40px;margin-bottom:16px;">⚠️</div>'
-        +'<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;margin-bottom:10px;">Erro de conexão</div>'
-        +'<div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:16px;line-height:1.6;">'+(err.message||'Erro ao conectar ao banco de dados.')+'</div>'
-        +'<div style="background:rgba(255,255,255,.08);border-radius:10px;padding:14px;text-align:left;font-size:12px;color:rgba(255,255,255,.65);line-height:1.8;margin-bottom:18px;">'
-        +'As tabelas precisam ser criadas no Supabase.<br/>Acesse: <strong>Supabase → SQL Editor → New query</strong> e execute o script de configuração.'
-        +'</div>'
-        +'<button onclick="location.reload()" style="padding:11px 28px;background:#02C39A;border:none;border-radius:9px;font-family:Syne,sans-serif;font-weight:800;font-size:14px;color:#0F1F45;cursor:pointer;">↺ Tentar novamente</button>'
+      // Detecta se é erro de REDE (firewall, sem internet, DNS bloqueado) ou erro do SERVIDOR
+      var msg=String(err&&err.message||err||'');
+      var isNetworkErr=msg.indexOf('Failed to fetch')>=0
+                     ||msg.indexOf('NetworkError')>=0
+                     ||msg.indexOf('ERR_INTERNET_DISCONNECTED')>=0
+                     ||msg.indexOf('ERR_NETWORK')>=0
+                     ||msg.indexOf('ERR_NAME_NOT_RESOLVED')>=0
+                     ||msg.indexOf('TypeError: Failed')>=0;
+      var html='<div style="text-align:center;color:#fff;max-width:520px;padding:24px;">';
+      if(isNetworkErr){
+        html+='<div style="font-size:40px;margin-bottom:16px;">🌐</div>'
+          +'<div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;margin-bottom:8px;">Sem conexão com o servidor</div>'
+          +'<div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:18px;line-height:1.6;">Sua rede pode estar bloqueando o acesso ao banco de dados. Isso é comum em <strong>Wi-Fi de shopping ou prédio comercial</strong>.</div>'
+          +'<div style="background:rgba(2,195,154,.08);border:1px solid rgba(2,195,154,.25);border-radius:10px;padding:16px;text-align:left;font-size:12px;color:rgba(255,255,255,.85);line-height:1.9;margin-bottom:14px;">'
+          +'<strong style="color:#02C39A;">Como resolver:</strong><br/>'
+          +'<strong>1.</strong> Tente usar o <strong>4G/dados móveis</strong> do celular como hotspot<br/>'
+          +'<strong>2.</strong> Instale o <strong><a href="https://1.1.1.1/" target="_blank" style="color:#02C39A;">app 1.1.1.1 (Cloudflare WARP)</a></strong> — VPN gratuita que resolve em qualquer rede<br/>'
+          +'<strong>3.</strong> Ou peça ao <strong>TI da rede</strong> para liberar o domínio <code style="background:rgba(0,0,0,.3);padding:1px 6px;border-radius:3px;">*.supabase.co</code>'
+          +'</div>'
+          +'<div style="background:rgba(255,255,255,.05);border-radius:8px;padding:10px;font-size:11px;color:rgba(255,255,255,.45);margin-bottom:18px;">'
+          +'💡 <strong>Teste rápido:</strong> abra <a href="https://chbrdzzpypvwfpqonfqs.supabase.co/rest/v1/" target="_blank" style="color:rgba(255,255,255,.6);text-decoration:underline;">este link</a> em outra aba. Se não carregar, é a rede que está bloqueando.'
+          +'</div>';
+      } else {
+        html+='<div style="font-size:40px;margin-bottom:16px;">⚠️</div>'
+          +'<div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;margin-bottom:10px;">Erro de conexão</div>'
+          +'<div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:16px;line-height:1.6;">'+esc(msg||'Erro ao conectar ao banco de dados.')+'</div>'
+          +'<div style="background:rgba(255,255,255,.08);border-radius:10px;padding:14px;text-align:left;font-size:12px;color:rgba(255,255,255,.65);line-height:1.8;margin-bottom:18px;">'
+          +'Se o problema persistir, contate o administrador. Pode ser um problema temporário do Supabase ou as tabelas precisam ser criadas.'
+          +'</div>';
+      }
+      html+='<button onclick="location.reload()" style="padding:11px 28px;background:#02C39A;border:none;border-radius:9px;font-family:Syne,sans-serif;font-weight:800;font-size:14px;color:#0F1F45;cursor:pointer;">↺ Tentar novamente</button>'
         +'</div>';
+      ls.innerHTML=html;
       ls.style.display='flex';
     }
   });
